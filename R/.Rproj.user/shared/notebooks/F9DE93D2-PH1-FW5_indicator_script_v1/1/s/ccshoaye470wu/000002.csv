@@ -1,3 +1,0 @@
-"0","assess_id_list <- unique(df_plot$assess_id)"
-"0",""
-"0","gg_polys <- highlight_poly(x=assess_id_list, y=df_abund_agg, shp=shp_part, base_map=coast, lims=c(north, west, east, south))"

@@ -1,8 +1,0 @@
-"0","#clear R environment"
-"0","rm(list = ls()) "
-"0",""
-"0","#enter the directory for where the processed CPR data is to be stored"
-"0","dir_main <- ""../Data_processed/"""
-"0",""
-"0","#enter the directory for where the raw CPR data is stored"
-"0","dir_cpr <- ""../Data_raw/CPR_data/"""

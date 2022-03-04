@@ -1,3 +1,0 @@
-"0","if(all(df_abund_agg$is_point)==FALSE){"
-"0","  df_rmse <- extract_idw_rmse(files=file_list)"
-"0","}"

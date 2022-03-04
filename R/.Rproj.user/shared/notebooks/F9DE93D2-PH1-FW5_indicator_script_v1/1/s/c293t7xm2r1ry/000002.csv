@@ -1,6 +1,0 @@
-"0","df_abund_agg <- df_abund_agg %>%"
-"0","  group_by(lifeform) %>%"
-"0","  dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance)] )) %>%"
-"0","  dplyr::mutate(abundance = abundance + min_non_zero*0.5) %>%"
-"0","  ungroup() %>%"
-"0","  dplyr::select(-min_non_zero)"

@@ -1,6 +1,0 @@
-"0","df_years <- clean_years(x=shp_merged, thr=mon_thr)"
-"0",""
-"0","#show proportion of years removed"
-"0","if(nrow(df_years > 0)){"
-"0","  boxplot(df_years$prop_years_removed)"
-"0","}"

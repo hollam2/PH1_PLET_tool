@@ -1,2 +1,0 @@
-"0","df_fill <- fill_gaps(x=shp_merged, y=df_years) %>%"
-"0","    filter(!is.na(abundance))"

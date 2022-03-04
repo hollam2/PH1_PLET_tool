@@ -1,5 +1,0 @@
-"0","#generate directory for processed data"
-"0","dir.create(file.path(dir_main), showWarnings = FALSE)"
-"0",""
-"0","#create plot output directory"
-"0","dir.create(file.path(dir_out), showWarnings = FALSE)"

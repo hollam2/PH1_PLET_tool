@@ -1,5 +1,0 @@
-"0","#function to prepare the reference envelopes for the multiple lifeform pairs comparisons"
-"0","envAll <- find_envAll(x=df_ref, lf=df_lf)"
-"0",""
-"0","#function to calculate the lifeform pairs indicator from the reference envelopes and comparison data"
-"0","piResults <- PIcalcAll(x=envAll, y=df_comp, z=df_ref, lf=df_lf)"

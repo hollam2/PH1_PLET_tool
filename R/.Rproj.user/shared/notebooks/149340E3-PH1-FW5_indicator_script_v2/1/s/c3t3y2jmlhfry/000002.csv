@@ -1,2 +1,0 @@
-"0","id_vars <- c(""period"", ""num_samples"", ""abundance_type"", ""taxa_used"")"
-"0","lf_list <- colnames(df)[!(colnames(df) %in% id_vars)]"

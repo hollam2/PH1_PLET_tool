@@ -1,6 +1,0 @@
-"0","#load the plankton abundance data"
-"0","df_abund <- read_fst(paste0(dir_raw, ""df_abund.fst"")) %>%"
-"0","  filter(abundance > 0 & !is.na(aphia_id))"
-"2","Error in read_fst(paste0(dir_raw, ""df_abund.fst"")) : 
-  Error opening fst file for reading, please check access rights and file availability
-"

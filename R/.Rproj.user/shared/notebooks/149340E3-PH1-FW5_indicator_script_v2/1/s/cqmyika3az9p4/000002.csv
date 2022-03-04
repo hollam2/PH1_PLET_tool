@@ -1,4 +1,0 @@
-"0","#load the lifeform data and clean up names"
-"0","df <- head(fread(paste0(dir_data, file_lf)),-1) %>%"
-"0","  do(janitor::clean_names(.)) %>%"
-"0","  do(as.data.frame(.))"

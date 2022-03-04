@@ -1,2 +1,0 @@
-"0","#create output"
-"0","write_fst(df_output, path=paste0(dir_main, ""df_cpr.fst""))"
