@@ -1,0 +1,3 @@
+"0","if(all(df_abund_agg$is_point)==TRUE){"
+"0","  shp_merged <- process_point(x=df_abund_agg)"
+"0","}"

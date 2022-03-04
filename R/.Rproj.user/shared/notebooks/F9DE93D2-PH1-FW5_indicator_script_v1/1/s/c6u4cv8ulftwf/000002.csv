@@ -1,0 +1,6 @@
+"0","df_abund_tagged <- df_abund_tagged %>%"
+"0","  dplyr::mutate(size_class_name = ifelse(sm_phyto == 1 & size_class == 2, "",Sm"","
+"0","                                         ifelse(lg_phyto == 1 & size_class == 1, "",Lg"", NA)),"
+"0","                size_class_name = ifelse(is.na(size_class_name), """", size_class_name)) %>%"
+"0","  dplyr::mutate(taxon = paste0(taxon, size_class_name)) %>%"
+"0","  dplyr::select(-c(size_class, size_class_name))"

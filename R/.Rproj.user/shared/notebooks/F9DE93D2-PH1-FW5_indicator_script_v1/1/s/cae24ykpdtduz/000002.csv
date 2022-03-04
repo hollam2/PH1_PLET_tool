@@ -1,0 +1,5 @@
+"0","if(all(df_abund_agg$is_point)==FALSE){"
+"0","  shp_merged <- fill_ts(x=df_abund_agg, y=shp_merged, shp=shp_part)"
+"0","}"
+"1","Joining, by = c(""lifeform"", ""year"", ""month"", ""assess_id"")
+"

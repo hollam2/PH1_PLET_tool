@@ -1,0 +1,8 @@
+"0","if(all(df_abund_agg$is_point)==FALSE){"
+"0","  sp_output <- generate_grd(x=df_abund_agg, shp=shp_part, land=coast, bounds=c(north, east, south, west))"
+"0","  "
+"0","  grd <- sp_output[[1]]"
+"0","  df_abund_sp <- sp_output[[2]]"
+"0","  "
+"0","  plot(grd)"
+"0","}"

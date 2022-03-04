@@ -1,0 +1,8 @@
+"0","#specify the directory for where the raw data is stored"
+"0","dir_data <- ""../data/"""
+"0",""
+"0","#enter the main directory to use to store image outputs"
+"0","dir_out <- ""../output/"""
+"0",""
+"0","#create plot output directory"
+"0","dir.create(file.path(dir_out), showWarnings = FALSE)"

@@ -1,0 +1,164 @@
+---
+title: "PH1/FW5 tool"
+---
+
+This tool uses a csv fileoutput from the Plankton Lifeform Extraction Tool (PLET) available on DASSH: https://www.dassh.ac.uk/lifeforms/
+
+The PLET aggregates the plankton abundance datasets to lifeforms per month for a user-defined spatial area (rectangle or polygon). 
+
+This script uses the PLET export data to calculate the lifeform pairs indicator and to calculate the Kendall statistic for a user-specified range in the time-series for all lifeforms and relevant lifeform pairs contained in the dataset.
+
+Functions and supporting scripts are found in the "Supporting_scripts" subdirectory.
+
+Author: Matthew Holland
+Contact: matt.holland@plymouth.ac.uk
+Latest version date: 4 March 2022
+```{r}
+#clear R environment
+rm(list = ls()) 
+
+#turn off scientific notation
+options(scipen=999)
+
+#enter the range of years covered by the reference period (this is used to define the reference envelope)
+ref_years <- c(2015, 2019)
+
+#enter the range of years covered by the comparison period (this is used to determine the comparison data)
+comp_years <- c(2000, 2014)
+
+#lifeform abundance dataset filename
+file_lf <- "lifeform.csv"
+
+#set threshold for minimum number of months out of the year required for an assessment area to be included
+mon_thr <- 8
+```
+Check if all required packages are installed. Install them if they are not present. Then load the packages.
+```{r, include=FALSE}
+list.of.packages <- c("tidyverse", "data.table", "janitor", "pracma", "broom", "EnvStats", "gridExtra")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages, require, character.only = TRUE)
+rm(list.of.packages, new.packages)
+
+#load the supporting functions
+source("Supporting_scripts/new_20062021.R")
+source("Supporting_scripts/Supporting_functions_v2.R")
+```
+Specify subdirectories for data if not already done
+```{r}
+#specify the directory for where the raw data is stored
+dir_data <- "../data/"
+
+#enter the main directory to use to store image outputs
+dir_out <- "../output/"
+
+#create plot output directory
+dir.create(file.path(dir_out), showWarnings = FALSE)
+```
+Read in the plankton lifeforms data - exclude the last line which contains the total abundances
+```{r}
+#load the lifeform data and clean up names
+df <- head(fread(paste0(dir_data, file_lf)),-1) %>%
+  do(janitor::clean_names(.)) %>%
+  do(as.data.frame(.))
+```
+Generate a string for the lifeforms contained in the dataset
+```{r}
+id_vars <- c("period", "num_samples", "abundance_type", "taxa_used")
+lf_list <- colnames(df)[!(colnames(df) %in% id_vars)]
+```
+Clean the data and convert lifeform data to long format
+```{r}
+#convert all lifeform columns to numeric
+df[lf_list] <- suppressWarnings(sapply(df[lf_list],as.numeric))
+
+#remove lifeforms not represented in this data at all
+df <- df[,colSums(is.na(df))<nrow(df)]
+
+#update lifeform list
+lf_list <- colnames(df)[!(colnames(df) %in% id_vars)]
+
+#replace NA values with 0 when some lifeforms were detected (i.e. there was a real sample)
+df[rowSums(df[,lf_list], na.rm=TRUE) > 0, lf_list][is.na(df[rowSums(df[,lf_list], na.rm=TRUE) > 0, lf_list])] <- 0
+
+#convert to long format
+df <- df %>%
+  pivot_longer(-all_of(id_vars), names_to = "lifeform", values_to = "abundance") %>%
+  dplyr::mutate(abundance = as.numeric(abundance))
+```
+Split period variable into year and month and subset data to temporal range for this analysis based on conbined range of reference and comparison years
+```{r}
+dates <- read.table(text = as.character(df$period), sep="-", stringsAsFactors=FALSE)
+colnames(dates) <- c("year", "month")
+
+df <- cbind(dates, df) %>%
+  dplyr::select(-period) %>%
+  filter(year >= min(c(ref_years, comp_years)),
+         year <= max(c(ref_years, comp_years)))
+
+rm(dates)
+```
+Replace 0 values with 0.5* the min value for the lifeform so data can be log10 transformed
+```{r}
+df <- df %>%
+  group_by(lifeform) %>%
+  dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%
+  dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%
+  ungroup() %>%
+  dplyr::select(-min_non_zero)
+```
+Quality control steps from Bedford et al. (2020) in GCB. "Lifeform indicators reveal large-scale shifts in plankton across the North-West European shelf"
+```{r}
+#function for remove years from time series with less than n months of interpolated data and determine proportion of years removed
+df <- clean_years(x=df, thr=mon_thr)
+
+#function for filling month gaps in the time series using temporal interpolation with a max gap of 3 months as default
+df <- fill_gaps(df, max_gap = 3)
+```
+Define the reference and comparison datasets
+```{r}
+#function for extracting a dataframe for a particular time period
+df_ref <- dataSelect(x=df, lf=df_lf, lims=ref_years)
+df_comp <- dataSelect(x=df, lf=df_lf, lims=comp_years)
+```
+Calculate the lifeform pairs indicator reference envelope for each spatial unit in the dataset and compute the lifeform pairs indicator (PI)
+```{r}
+#function to prepare the reference envelopes for the multiple lifeform pairs comparisons
+envAll <- find_envAll(x=df_ref, lf=df_lf)
+
+#function to calculate the lifeform pairs indicator from the reference envelopes and comparison data
+piResults <- PIcalcAll(x=envAll, y=df_comp, z=df_ref, lf=df_lf)
+```
+Generate plots of the lifeform pairs indicator
+```{r}
+#function for plotting the PI envelope
+env_plots <- plot_env(x=envAll, y=df_ref, z=df_comp, lf=df_lf, pi=piResults)
+```
+Model change in lifeforms over time with Kendall test
+```{r}
+#function for modelling change in lifeforms over time with Kendall test
+df_fits_tot <- kendallAll(x=df)
+```
+Plot the data as time-series
+```{r}
+#function to prepare the data to be plotted as time-series
+df_plot <- create_ts(x=df, y=df_fits_tot)
+
+#function for plotting time-series
+ts_plots <- plot_ts(x=df_plot)
+```
+Combine the PI plots with the relevant time-series and output figures to disk
+```{r, include=FALSE}
+#function to select, combine and save the combined plots (saved to output subdirectory)
+combine_pi_plots(x=env_plots, y=ts_plots, limits=range(df_plot$year), path=dir_out)
+```
+
+
+
+
+
+
+
+
+
+

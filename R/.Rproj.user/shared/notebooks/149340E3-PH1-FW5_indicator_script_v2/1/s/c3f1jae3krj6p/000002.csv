@@ -1,0 +1,6 @@
+"0","df <- df %>%"
+"0","  group_by(lifeform) %>%"
+"0","  dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%"
+"0","  dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%"
+"0","  ungroup() %>%"
+"0","  dplyr::select(-min_non_zero)"

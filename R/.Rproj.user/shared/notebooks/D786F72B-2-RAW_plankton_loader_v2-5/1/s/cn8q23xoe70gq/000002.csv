@@ -1,0 +1,2 @@
+"0","df_master <- read_excel(paste0(dir_raw, ""Masterlist-V5_working.xlsx""), sheet = ""SpeciesInfo"")"
+"0","df_master <- janitor::clean_names(df_master) #make the column names more R friendly"

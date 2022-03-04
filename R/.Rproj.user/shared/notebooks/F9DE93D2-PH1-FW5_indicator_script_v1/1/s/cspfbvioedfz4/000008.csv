@@ -1,0 +1,5 @@
+"0","#load the plankton abundance data and apply the depth cutoff"
+"0","df_abund <- fread(paste0(dir_raw, file_abund)) %>%"
+"0","  filter(abundance > 0 & !is.na(aphia_id)) %>%"
+"0","  filter(is.na(depth_max) | depth_max <= max_dep) %>%"
+"0","  dplyr::select(-c(depth_min, depth_max))"

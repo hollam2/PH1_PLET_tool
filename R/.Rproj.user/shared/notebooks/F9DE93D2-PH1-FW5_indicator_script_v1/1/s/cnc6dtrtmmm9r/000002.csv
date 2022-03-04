@@ -1,0 +1,2 @@
+"0","#use a custom function to aggregate the data by lifeform"
+"0","df_abund_agg <- count_lf(x=df_abund_tagged)"

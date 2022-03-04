@@ -1,0 +1,8 @@
+"0","shp_merged <- shp_merged %>%"
+"0","  dplyr::select(assess_id, lifeform, year, month, abundance, is_point, n, rmse_idw, n_idw) %>%"
+"0","  filter(year >= start_query & year <= end_query) %>% #subset dataset to the year range of the analysis"
+"0","  dplyr::mutate(month=ifelse(nchar(month)==1, paste0( 0,month),month)) %>%"
+"0","  group_by(assess_id) %>% #ensure only data is available for assessment areas with real samples"
+"0","  filter(sum(n) > 0) %>%"
+"0","  ungroup() %>%"
+"0","  arrange(assess_id, lifeform, year, month)"

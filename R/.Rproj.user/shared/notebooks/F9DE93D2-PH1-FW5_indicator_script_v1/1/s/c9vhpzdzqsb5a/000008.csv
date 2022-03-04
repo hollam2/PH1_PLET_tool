@@ -1,0 +1,25 @@
+"0","combine_pi_plots(x=env_plots, y=ts_plots, z=gg_polys, limits=c(start_query, end_query), path=dir_out)"
+"2","Warning in (function (...)  :"
+"2","
+ "
+"2"," cannot remove file '../Output/timeseries_1960_to_2019/Atlantic Seasonally Stratified', reason 'Permission denied'
+"
+"2","Warning in (function (...)  :"
+"2","
+ "
+"2"," cannot remove file '../Output/timeseries_1960_to_2019/Irish Sea', reason 'Permission denied'
+"
+"2","Warning in (function (...)  :"
+"2","
+ "
+"2"," cannot remove file '../Output/timeseries_1960_to_2019/Southern North Sea', reason 'Permission denied'
+"
+"2","Warning in (function (...)  :"
+"2","
+ "
+"2"," cannot remove file '../Output/timeseries_1960_to_2019/Thames plume', reason 'Permission denied'
+"
+"1","[1]"
+"1"," ""lifeform pair: diatoms-dinoflagellates, assess_id: Atlantic Seasonally Stratified"""
+"1","
+"
