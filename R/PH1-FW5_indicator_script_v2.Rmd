@@ -2,7 +2,7 @@
 title: "PH1/FW5 tool"
 ---
 
-This tool uses a csv fileoutput from the Plankton Lifeform Extraction Tool (PLET) available on DASSH: https://www.dassh.ac.uk/lifeforms/
+This tool uses a csv file output from the Plankton Lifeform Extraction Tool (PLET) available on DASSH: https://www.dassh.ac.uk/lifeforms/
 
 The PLET aggregates the plankton abundance datasets to lifeforms per month for a user-defined spatial area (rectangle or polygon). 
 
