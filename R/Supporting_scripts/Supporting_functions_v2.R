@@ -301,8 +301,12 @@ kendallAll <- function(x){
     dplyr::mutate(count = n()) %>%
     filter(count >= 3) %>%
     dplyr::mutate(year=as.integer(year)) %>%
-    do(fits = broom::tidy(EnvStats::kendallTrendTest(abundance_mean ~ year, ci.slope=FALSE, data=.))) %>% 
-    unnest(fits)
+    nest() %>%
+    mutate(fits = map(data, ~EnvStats::kendallTrendTest(abundance_mean ~ year, ci.slope=FALSE, data=.x)),
+           fits2 = map(fits, ~structure(.x, class="htest")),
+           fits3 = map(fits2, ~tidy(.x))) %>%
+    dplyr::select(-c(data, fits, fits2)) %>%
+    unnest_wider(fits3)
   
   #column to code whether p-value is significant
   df_fits_tot$sig <- ifelse(df_fits_tot$p.value <= 0.05, TRUE, FALSE)
