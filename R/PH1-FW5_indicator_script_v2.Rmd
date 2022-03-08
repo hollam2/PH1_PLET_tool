@@ -134,10 +134,10 @@ Generate plots of the lifeform pairs indicator
 #function for plotting the PI envelope
 env_plots <- plot_env(x=envAll, y=df_ref, z=df_comp, lf=df_lf, pi=piResults)
 ```
-Model change in lifeforms over time with Kendall test
+Model change in lifeforms over time with Kendall test. Specify whether to perform the kendallTrendTest on annual values or the kendallSeasonalTrendTest on monthly values with "seasonal=TRUE/FALSE"
 ```{r}
 #function for modelling change in lifeforms over time with Kendall test
-df_fits_tot <- kendallAll(x=df)
+df_fits_tot <- kendallAll(x=df, seasonal=FALSE)
 ```
 Plot the data as time-series
 ```{r}
