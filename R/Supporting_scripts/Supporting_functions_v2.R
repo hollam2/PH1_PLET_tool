@@ -2,30 +2,43 @@
 
 #function for remove years from time series with less than n months of interpolated data and determine proportion of years removed
 clean_years <- function(x, thr){
+  
   temp <- x %>%
-    group_by(lifeform) %>%
+    group_by(assess_id, lifeform) %>%
     dplyr::mutate(orig_year = length(unique(year))) %>% #count number of years per cell in the original data
     ungroup() %>%
     filter(!is.na(abundance)) %>%
-    group_by(lifeform, year) %>% 
+    group_by(assess_id, lifeform, year) %>% 
     dplyr::mutate(n=n()) %>% #count number of months of data within each year per cell
     ungroup() %>%
     filter(n < thr) %>% #extract years with less than n months of real data
-    group_by(lifeform) %>%
+    group_by(assess_id, lifeform) %>%
     dplyr::mutate(prop_years_removed = length(unique(year)) / orig_year) %>% #determine proportion of years of data removed per grid cell
     ungroup()
   
   if(nrow(temp > 0)){
-    print(paste("Proportion of years removed:", unique(round(temp$prop_years_removed, 2))))
+    
+    print_out <- temp %>%
+      dplyr::select(assess_id, prop_years_removed) %>%
+      distinct() %>%
+      bind_rows(data.frame(assess_id=unique(x$assess_id)[!unique(x$assess_id) %in% temp$assess_id] )) %>%
+      mutate(prop_years_removed = ifelse(is.na(prop_years_removed), 0, prop_years_removed)) %>%
+      arrange(assess_id)
+    
+      print(print_out)
   } else {
-    print(paste("Proportion of years removed:", 0))
+    print(paste("No years removed"))
   }
   
-  years_exclude <- sort(unique(temp$year))
+   output <- x %>%
+    left_join(data.frame(assess_id=temp$assess_id,
+                         year=temp$year,
+                         exclude=TRUE),
+              by=c("assess_id", "year")) %>%
+    mutate(exclude = ifelse(is.na(exclude),FALSE,TRUE)) %>%
+    mutate(abundance = ifelse(exclude==TRUE, NA, abundance)) %>%
+    dplyr::select(-exclude)
   
-  output <- x
-  output[output$year %in% years_exclude,"abundance"] <- NA
-
   return(output)
 }
 
@@ -34,14 +47,30 @@ fill_gaps <- function(x, max_gap = 3){
   
   #arrange the data to allow for NA interpolation across time
   temp <- x %>% 
-    arrange(lifeform, year, month) %>%
-    group_by(lifeform) %>%
-    dplyr::mutate(abundance = zoo::na.approx(abundance, maxgap = max_gap, rule = 2)) %>%
+    arrange(assess_id, lifeform, year, month) %>%
+    group_by(assess_id, lifeform) %>%
+    dplyr::mutate(abundance_interp = zoo::na.approx(abundance, maxgap = max_gap, rule = 2)) %>%
     ungroup()
   
-  print(paste("Proportion of missing months filled:", round(1-(sum(is.na(temp$abundance))/sum(is.na(x$abundance))),2)))
+  #print the number of NA months replaced in each assess_id
+  print_out <- temp %>%
+    group_by(assess_id, lifeform, year) %>%
+    filter(!all(is.na(abundance))) %>%
+    ungroup() %>%
+    arrange(assess_id, lifeform, year, month) %>%
+    filter(is.na(abundance)) %>%
+    dplyr::select(assess_id, lifeform, abundance, abundance_interp) %>%
+    group_by(assess_id, lifeform) %>%
+    dplyr::summarise(prop_months_filled = length(!is.na(abundance_interp) & is.na(abundance)) / length(is.na(abundance)),
+                     .groups="drop") %>%
+    dplyr::select(-lifeform) %>%
+    distinct()
+  
+  print(print_out)
   
   output <- temp %>%
+    mutate(abundance = abundance_interp) %>%
+    dplyr::select(-abundance_interp) %>%
     filter(!is.na(abundance))
   
   return(output)
@@ -64,221 +93,313 @@ dataSelect <- function(x, lf, lims){
   output <- x %>%
     filter(lifeform %in% all_of(as.vector(unlist(lf))),
            year>=lims[1] & year<=lims[2]) %>%
-    pivot_wider(names_from = lifeform, values_from = abundance)
+    pivot_wider(names_from = lifeform, values_from = abundance) %>%
+    arrange(assess_id, year, month)
   
   return(output)
+}
+
+#function to prepare the reference envelopes for the multiple lifeform pairs comparisons
+find_envAll <- function(x, lf){
+  
+  lf_data_id <- lf %>%
+    filter(V1 %in% all_of(colnames(x)),
+           V2 %in% all_of(colnames(x)))
+  
+    main_outer <- data.frame()
+    main_inner <- data.frame()
+    for(i in 1:nrow(lf_data_id)){
+      temp_lf <- as.vector(unlist(lf_data_id[i,]))
+      
+      temp_x <- x %>%
+        dplyr::select(polygon, all_of(temp_lf))
+      
+      polygon_list <- sort(unique(temp_x$polygon))
+      
+      df_outer <- data.frame()
+      df_inner <- data.frame()
+      for(j in 1:length(polygon_list)){
+        temp_pair <- subset(temp_x, polygon == polygon_list[j])
+        
+        #command to skip envelope fitting for data with no variance
+        abort <- ifelse(sd(as.vector(unlist(temp_pair[,2]))) == 0 | sd(as.vector(unlist(temp_pair[,3])))==0, TRUE, FALSE)
+        
+        if(abort==FALSE){
+          
+          envPts <- findEvn(as.vector(unlist(temp_pair[,2])),
+                            as.vector(unlist(temp_pair[,3])),
+                            p=0.9,
+                            sc=TRUE)
+          envPts_unlist <- rbindlist(envPts, fill=TRUE)
+          temp_outer <- data.frame(outX=envPts_unlist$outX[complete.cases(envPts_unlist$outX)],
+                                   outY=envPts_unlist$outY[complete.cases(envPts_unlist$outY)],
+                                   polygon = polygon_list[j])
+          temp_inner <- data.frame(inX=envPts_unlist$inX[complete.cases(envPts_unlist$inX)],
+                                   inY=envPts_unlist$inY[complete.cases(envPts_unlist$inY)],
+                                   polygon = assess_id_list[j])
+          
+          df_outer <- rbind(df_outer, temp_outer)
+          df_inner <- rbind(df_inner, temp_inner)
+        }
+      }
+      
+      if(nrow(df_outer) > 0 & nrow(df_inner) > 0){
+        
+        df_outer$lf_pair <- paste(temp_lf, collapse="-")
+        df_inner$lf_pair <- paste(temp_lf, collapse="-")
+        
+        df_outer$data_id <- temp_data_id
+        df_inner$data_id <- temp_data_id
+        
+        main_outer <- rbind(main_outer, df_outer)
+        main_inner <- rbind(main_inner, df_inner)
+        
+      }
+    }
+    data_id_outer <- rbind(data_id_outer, main_outer)
+    data_id_inner <- rbind(data_id_inner, main_inner)
+  
+  main_list <- list(data_id_outer, data_id_inner)
+  return(main_list)
 }
 
 
 #function to prepare the reference envelopes for the multiple lifeform pairs comparisons
 find_envAll <- function(x, lf){
   
-  #determine relevant lifeform pairs for the dataset
-  x_temp <- x
-  
-  #find the relevant lifeform pairs
-  x_temp <- x_temp[,colSums(is.na(x_temp))<nrow(x_temp)]
-  
-  lf_temp <- lf %>%
-    filter(V1 %in% all_of(colnames(x_temp)) &
-           V2 %in% all_of(colnames(x_temp)))
-  
-  main_outer <- data.frame()
-  main_inner <- data.frame()
-  for(i in 1:nrow(lf_temp)){
-    temp_lf <- as.vector(unlist(lf_temp[i,]))
-    
-    temp_x <- x_temp %>%
-      dplyr::select(all_of(temp_lf))
+    #determine relevant lifeform pairs for the dataset
+    x_data_id <- x
 
-    df_outer <- data.frame()
-    df_inner <- data.frame()
+    #find the relevant lifeform pairs
+    x_data_id <- x_data_id[,colSums(is.na(x_data_id))<nrow(x_data_id)]
     
-      #command to skip envelope fitting for data with no variance
-      abort <- ifelse(sd(as.vector(unlist(temp_x[,1]))) == 0 | sd(as.vector(unlist(temp_x[,2])))==0, TRUE, FALSE)
+    lf_data_id <- lf %>%
+      filter(V1 %in% all_of(colnames(x_data_id)),
+             V2 %in% all_of(colnames(x_data_id)))
+    
+    main_outer <- data.frame()
+    main_inner <- data.frame()
+    for(i in 1:nrow(lf_data_id)){
+      temp_lf <- as.vector(unlist(lf_data_id[i,]))
       
-      if(abort==FALSE){
+      temp_x <- x_data_id %>%
+        dplyr::select(assess_id, all_of(temp_lf))
+      
+      assess_id_list <- sort(unique(temp_x$assess_id))
+      
+      df_outer <- data.frame()
+      df_inner <- data.frame()
+      for(j in 1:length(assess_id_list)){
+        temp_pair <- subset(temp_x, assess_id == assess_id_list[j])
         
-        envPts <- findEvn(as.vector(unlist(temp_x[,1])),
-                          as.vector(unlist(temp_x[,2])),
-                          p=0.9,
-                          sc=TRUE)
-        envPts_unlist <- rbindlist(envPts, fill=TRUE)
-        temp_outer <- data.frame(outX=envPts_unlist$outX[complete.cases(envPts_unlist$outX)],
-                                 outY=envPts_unlist$outY[complete.cases(envPts_unlist$outY)])
-        temp_inner <- data.frame(inX=envPts_unlist$inX[complete.cases(envPts_unlist$inX)],
-                                 inY=envPts_unlist$inY[complete.cases(envPts_unlist$inY)])
+        #command to skip envelope fitting for data with no variance
+        abort <- ifelse(sd(as.vector(unlist(temp_pair[,2]))) == 0 | sd(as.vector(unlist(temp_pair[,3])))==0, TRUE, FALSE)
         
-        df_outer <- rbind(df_outer, temp_outer)
-        df_inner <- rbind(df_inner, temp_inner)
+        if(abort==FALSE){
+          
+          envPts <- findEvn(as.vector(unlist(temp_pair[,2])),
+                            as.vector(unlist(temp_pair[,3])),
+                            p=0.9,
+                            sc=TRUE)
+          envPts_unlist <- rbindlist(envPts, fill=TRUE)
+          temp_outer <- data.frame(outX=envPts_unlist$outX[complete.cases(envPts_unlist$outX)],
+                                   outY=envPts_unlist$outY[complete.cases(envPts_unlist$outY)],
+                                   assess_id = assess_id_list[j])
+          temp_inner <- data.frame(inX=envPts_unlist$inX[complete.cases(envPts_unlist$inX)],
+                                   inY=envPts_unlist$inY[complete.cases(envPts_unlist$inY)],
+                                   assess_id = assess_id_list[j])
+          
+          df_outer <- rbind(df_outer, temp_outer)
+          df_inner <- rbind(df_inner, temp_inner)
+        }
       }
-    
-    
-    if(nrow(df_outer) > 0 & nrow(df_inner) > 0){
       
-      df_outer$lf_pair <- paste(temp_lf, collapse="-")
-      df_inner$lf_pair <- paste(temp_lf, collapse="-")
-      
-      main_outer <- rbind(main_outer, df_outer)
-      main_inner <- rbind(main_inner, df_inner)
-      
-    
-    }
-}
-  
+      if(nrow(df_outer) > 0 & nrow(df_inner) > 0){
+        
+        df_outer$lf_pair <- paste(temp_lf, collapse="-")
+        df_inner$lf_pair <- paste(temp_lf, collapse="-")
+
+        main_outer <- rbind(main_outer, df_outer)
+        main_inner <- rbind(main_inner, df_inner)
+        
+        }
+
+  }
   main_list <- list(main_outer, main_inner)
   return(main_list)
 }
 
 
-#function to calculate the lifeform pairs indicator from the reference envelopes and comparison data
+#function to find the lifeform pairs indicator from the reference envelopes and comparison data
 PIcalcAll <- function(x, y, z, lf){
   
-  main_outer <- x[[1]]
-  main_inner <- x[[2]]
-  
-  main_output <- data.frame()
-  for(i in 1:length(unique(main_outer$lf_pair))){
-    temp_lf <- unlist(strsplit(sort(unique(main_outer$lf_pair))[i], "-"))
+  main_outer_data_id <- x[[1]]
+  main_inner_data_id <- x[[2]]
     
-    temp_outer <- subset(main_outer, lf_pair == paste(temp_lf, collapse="-"))
-    temp_inner <- subset(main_inner, lf_pair == paste(temp_lf, collapse="-"))
-    
-    temp_y <- y %>%
-      dplyr::select(all_of(temp_lf))
-    
-    df_z <- z %>%
-      dplyr::select(all_of(temp_lf))
-
-    #arrange the envelope data back into a list
-    envelopePts <- list("EnvOuter"=data.frame("outX" = temp_outer$outX,"outY"=temp_outer$outY),
-                          "EnvInner"=data.frame("inX" = temp_inner$inX,"inY" = temp_inner$inY))
+    main_output <- data.frame()
+    for(i in 1:length(unique(main_outer_data_id$lf_pair))){
+      temp_lf <- unlist(strsplit(sort(unique(main_outer_data_id$lf_pair))[i], "-"))
       
-    compDat <- data.frame(y1 = as.vector(unlist(temp_y[,1])),
-                            y2 = as.vector(unlist(temp_y[,2])))
+      df_outer <- subset(main_outer_data_id, lf_pair == paste(temp_lf, collapse="-"))
+      df_inner <- subset(main_inner_data_id, lf_pair == paste(temp_lf, collapse="-"))
       
-    #add labelling variables to PI results dataframe
-    df_refPoints <- df_z %>%
-        dplyr::summarise(refPoints = n())
+      df_y <- y %>%
+        dplyr::select(assess_id, all_of(temp_lf))
       
-    #command to skip envelope fitting for data with no reference envelope
-    abort <- ifelse(nrow(envelopePts[[1]]) == 0 & nrow(envelopePts[[2]]) == 0, TRUE, FALSE)
+      df_z <- z %>%
+        dplyr::select(assess_id, all_of(temp_lf))
       
-      if(abort==FALSE){
-        piPts <- PIcalc(compDat, envelopePts, 0.9)
-        piPts <- do.call(cbind.data.frame, piPts)
-        piPts$refPoints <- df_refPoints$refPoints[1]
-        piPts <- cbind(lf_pair=paste(temp_lf, collapse="-"), piPts)
+      assess_ids <- intersect(unique(df_y$assess_id), unique(df_z$assess_id))
+      
+      piList <- data.frame()
+      for(j in 1:length(assess_ids)){
+        
+        assess_id_temp <- assess_ids[j]
+        
+        temp_outer <- subset(df_outer, assess_id == assess_id_temp)
+        temp_inner <- subset(df_inner, assess_id == assess_id_temp)
+        temp_y <- subset(df_y, assess_id == assess_id_temp)
+        
+        #arrange the envelope data back into a list
+        envelopePts <- list("EnvOuter"=data.frame("outX" = temp_outer$outX,"outY"=temp_outer$outY),
+                            "EnvInner"=data.frame("inX" = temp_inner$inX,"inY" = temp_inner$inY))
+        
+        compDat <- data.frame(y1 = as.vector(unlist(temp_y[,2])),
+                              y2 = as.vector(unlist(temp_y[,3])))
+        
+        #add labelling variables to PI results dataframe
+        df_refPoints <- df_z %>%
+          group_by(assess_id) %>%
+          dplyr::summarise(refPoints = n())
+        
+        #command to skip envelope fitting for data with no reference envelope
+        abort <- ifelse(nrow(envelopePts[[1]]) == 0 & nrow(envelopePts[[2]]) == 0, TRUE, FALSE)
+        
+        if(abort==FALSE){
+          piPts <- PIcalc(compDat, envelopePts, 0.9)
+          piPts <- do.call(cbind.data.frame, piPts)
+          piPts$assess_id <- assess_id_temp
+          piPts$refPoints <- df_refPoints$refPoints[1]
+          
+          piList <- rbind(piList, piPts)
+        }
       }
+      
+      piList <- cbind(lf_pair = paste(temp_lf, collapse="-"), piList)
+      main_output <- rbind(main_output, piList)
+    }
     
-    main_output <- rbind(main_output, piPts)
-  }
-  
-  main_output <- dplyr::rename(main_output, binomialProbability = 'binomial probability')
-  
-  return(main_output)
+    main_output <- dplyr::rename(main_output, binomialProbability = 'binomial probability')
+
+   return(main_output)
 }
 
 
 #function for plotting the PI envelope
-plot_env <- function(x, y, z, lf, pi){
+plot_env <- function(x, y, z, lf, pi, label, threshold){
   
   #rounding function for labelling
   specify_decimal <- function(x, k) trimws(format(round(x, k), nsmall=k))
   
   refs <- y %>%
+    group_by(assess_id) %>%
     dplyr::summarise(refStart=min(year),
-                     refStop=max(year))
+                     refStop=max(year)) %>%
+    ungroup()
   
   comps <- z %>%
+    group_by(assess_id) %>%
     dplyr::summarise(compStart=min(year),
-                     compStop=max(year))
-
+                     compStop=max(year)) %>%
+    ungroup()
   
-  df_lookup_main <- data.frame(lf_pair=pi$lf_pair) %>%
-   mutate(refStart=refs$refStart[1],
-          refStop=refs$refStop[1],
-          compStart=comps$compStart[1],
-          compStop=comps$compStop[1]) %>%
-    dplyr::mutate(years_label = paste0("Ref: " , refStart, "-", refStop, ",", " Comp: ", compStart, "-", compStop))
+    df_lookup_main <- data.frame(assess_id = pi$assess_id, lf_pair=pi$lf_pair) %>%
+     left_join(refs, by = "assess_id") %>%
+     left_join(comps, by = "assess_id") %>%
+      dplyr::mutate(years_label = paste0("Ref: " , refStart, "-", refStop, ",", " Comp: ", compStart, "-", compStop))
   
-  #create labeller lookup table
-  df_lookup_main$string <- paste0('PI: ', specify_decimal(pi$PI, 2), ' ',
+    #create labeller lookup table
+    df_lookup_main$string <- paste0('PI: ', specify_decimal(pi$PI, 2), ' ',
                                   df_lookup_main$years_label,'\n',
                                   'ref points: ', pi$refPoints, ',', ' ',
                                   'comp points: ', pi$newPoints,',', ' ',
                                   'binom-p: ', specify_decimal(pi$binomialProbability, 4), ',', ' ',
                                   'chi-sq: ', specify_decimal(pi$chi.sq, 1))
   
-  main_outer <- x[[1]]
-  main_inner <- x[[2]]
+    main_outer <- x[[1]]
+    main_inner <- x[[2]]
   
-  plot_list <- list()
-  for(i in 1:length(unique(main_outer$lf_pair))){
+    main_outer_data_id <- main_outer
+    main_inner_data_id <- main_inner
     
-    temp_lf <- unlist(strsplit(sort(unique(main_outer$lf_pair))[i], "-"))
-    
-    df_outer <- subset(main_outer, lf_pair == paste(temp_lf, collapse="-"))
-    df_inner <- subset(main_inner, lf_pair == paste(temp_lf, collapse="-"))
-    
-    names(df_outer)[1:2] <- c("x", "y")
-    names(df_inner)[1:2] <- c("x", "y")
-    
-    df_outer$subid <- 1L
-    df_inner$subid <- 2L
-    df_polys <- rbind(df_outer, df_inner)
-    
-    temp_ref <- y %>% dplyr::select(1:4, all_of(temp_lf)) %>%
-      arrange(year, month)
-    names(temp_ref)[c(ncol(temp_ref)-1,ncol(temp_ref))] <- c("vx", "vy")
-    
-    temp_comp <- z %>% dplyr::select(1:4, all_of(temp_lf)) %>%
-      arrange(year, month)
-    names(temp_comp)[c(ncol(temp_comp)-1,ncol(temp_comp))] <- c("vx", "vy")
-    
-    #check the proportion of years represented in the data
-    year <- rbind(temp_comp, temp_ref) %>%
-      dplyr::select(year) %>%
-      distinct() %>%
-      dplyr::mutate(prop_years = length(unique(year) %in% seq(min(year), max(year), 1)) / length(seq(min(year), max(year), 1)))
-    
-    #grouping factor for colouring months
-    temp_comp$month <- as.numeric(temp_comp$month)
-    temp_comp$season <- ifelse(temp_comp$month %in% c(1, 2, 12), "months: 1 2 12",
-                               ifelse(temp_comp$month %in% c(3, 4, 5), "months: 3 4 5",
-                                      ifelse(temp_comp$month %in% c(6, 7, 8), "months: 6 7 8",
-                                             ifelse(temp_comp$month %in% c(9, 10, 11), "months: 9 10 11", "ERROR"))))
-    
-    #Create a custom color scale
-    factor_levels <- unique(temp_comp$season)
-    myColors <- c("blue", "green", "yellow", "red")
-    names(myColors) <- levels(factor_levels)
-    
-    #subset lookup table to panel of relevance
-    df_lookup_temp <- unique(subset(df_lookup_main, lf_pair == paste(temp_lf, collapse="-")))
-    
-    #create title reference string
-    years_label <- paste0("Ref: " , df_lookup_temp$refStart[1], "-", df_lookup_temp$refStop[1], ",", 
-                          " Comp: ", df_lookup_temp$compStart[1], "-", df_lookup_temp$compStop[1])
-    df_lookup_temp <- setNames(df_lookup_temp$string, df_lookup_temp$lf_pair)
-    
-      gg_panel <- ggplot() +
-        geom_polygon(data=df_polys, aes(x, y, subgroup = subid), fill="grey60", colour="black", size=0.25, alpha=0.5) +
-        geom_path(data=temp_comp, aes(x=vx, y=vy), colour="grey", linetype = 2, size=0.25) +
-        geom_point(data=temp_comp, aes(x=vx, y=vy, fill=season), shape=21) +
-        geom_point(data=temp_ref, aes(x=vx, y=vy), shape=21, fill=NA, colour="grey60", alpha=0.5) +
-        scale_x_continuous(name=bquote(log[10]* "(" * .(temp_lf[1]) * ")")) +
-        scale_y_continuous(name=bquote(log[10]* "(" * .(temp_lf[2]) * ")")) +
-        scale_fill_manual(values=myColors)+
-        facet_wrap(~ lf_pair, scales="free", labeller = labeller(lf_pair=df_lookup_temp)) +
-        theme_bw() +
-        theme(plot.title = element_text(hjust = 0.5),
-              legend.title = element_blank(),
-              legend.position = "none")
+    plot_list <- list()
+    for(i in 1:length(unique(main_outer_data_id$lf_pair))){
       
-    plot_list[[paste(temp_lf, collapse="-")]] <- gg_panel
-    
-  }
+      temp_lf <- unlist(strsplit(sort(unique(main_outer_data_id$lf_pair))[i], "-"))
+      
+      df_outer <- subset(main_outer_data_id, lf_pair == paste(temp_lf, collapse="-"))
+      df_inner <- subset(main_inner_data_id, lf_pair == paste(temp_lf, collapse="-"))
+      
+      names(df_outer)[1:2] <- c("x", "y")
+      names(df_inner)[1:2] <- c("x", "y")
+      
+      df_outer$subid <- 1L
+      df_inner$subid <- 2L
+      df_polys <- rbind(df_outer, df_inner)
+      
+      temp_ref <- y %>% dplyr::select(1:4, all_of(temp_lf)) %>%
+        arrange(assess_id, year, month)
+      names(temp_ref)[c(ncol(temp_ref)-1,ncol(temp_ref))] <- c("vx", "vy")
+      
+      temp_comp <- z %>% dplyr::select(1:4, all_of(temp_lf)) %>%
+        arrange(assess_id, year, month)
+      names(temp_comp)[c(ncol(temp_comp)-1,ncol(temp_comp))] <- c("vx", "vy")
+      
+      ids <- intersect(unique(temp_ref$assess_id),unique(temp_comp$assess_id))
+      
+      #grouping factor for colouring months
+      temp_comp$month <- as.numeric(temp_comp$month)
+      temp_comp$season <- ifelse(temp_comp$month %in% c(1, 2, 12), "months: 1 2 12",
+                                 ifelse(temp_comp$month %in% c(3, 4, 5), "months: 3 4 5",
+                                        ifelse(temp_comp$month %in% c(6, 7, 8), "months: 6 7 8",
+                                               ifelse(temp_comp$month %in% c(9, 10, 11), "months: 9 10 11", "ERROR"))))
+      
+      #Create a custom color scale
+      factor_levels <- unique(temp_comp$season)
+      myColors <- c("blue", "green", "yellow", "red")
+      names(myColors) <- levels(factor_levels)
+      
+      #subset lookup table to panel of relevance
+      df_lookup_temp <- unique(subset(df_lookup_main, lf_pair == paste(temp_lf, collapse="-")))
+      
+      #create title reference string
+      years_label <- paste0("Ref: " , df_lookup_temp$refStart[1], "-", df_lookup_temp$refStop[1], ",", 
+                            " Comp: ", df_lookup_temp$compStart[1], "-", df_lookup_temp$compStop[1])
+      df_lookup_temp <- setNames(df_lookup_temp$string, df_lookup_temp$assess_id)
+      
+      sub_plot_list <- list()
+      for(j in 1:length(ids)){
+        
+        poly <- ids[j]
+        
+        gg_panel <- ggplot() +
+          geom_polygon(data=subset(df_polys, assess_id == poly), aes(x, y, group = assess_id, subgroup = subid), fill="grey60", colour="black", size=0.25, alpha=0.5) +
+          geom_path(data=subset(temp_comp, assess_id == poly), aes(x=vx, y=vy), colour="grey", linetype = 2, size=0.25) +
+          geom_point(data=subset(temp_comp, assess_id == poly),aes(x=vx, y=vy, fill=season), shape=21) +
+          geom_point(data=subset(temp_ref, assess_id == poly),aes(x=vx, y=vy), shape=21, fill=NA, colour="grey60", alpha=0.5) +
+          scale_x_continuous(name=bquote(log[10]* "(" * .(temp_lf[1]) * ")")) +
+          scale_y_continuous(name=bquote(log[10]* "(" * .(temp_lf[2]) * ")")) +
+          scale_fill_manual(values=myColors)+
+          facet_wrap(~ assess_id, scales="free", labeller = labeller(assess_id=df_lookup_temp)) +
+          theme_bw() +
+          theme(plot.title = element_text(hjust = 0.5),
+                legend.title = element_blank(),
+                legend.position = "none")
+        
+        sub_plot_list[[poly]] <- gg_panel 
+      }
+      plot_list[[paste(temp_lf, collapse="-")]] <- sub_plot_list
+    }
   return(plot_list)
 }
 
@@ -293,12 +414,12 @@ kendallAll <- function(x, seasonal=FALSE){
     
     #model annual change in abundance of each group in each spatial unit
     df_fits_tot <- trajData %>%
-      dplyr::select(year, month, num_samples, lifeform, abundance) %>%
-      group_by(year, lifeform) %>%
+      dplyr::select(assess_id, year, month, num_samples, lifeform, abundance) %>%
+      group_by(assess_id, year, lifeform) %>%
       dplyr::summarise(abundance_mean = mean(abundance, na.rm=T),
                        .groups="drop") %>%
       filter(!is.nan(abundance_mean)) %>%
-      group_by(lifeform) %>%
+      group_by(assess_id, lifeform) %>%
       dplyr::mutate(count = n()) %>%
       filter(count >= 3) %>%
       dplyr::mutate(year=as.integer(year)) %>%
@@ -313,12 +434,12 @@ kendallAll <- function(x, seasonal=FALSE){
     
     #model annual change in abundance of each group in each spatial unit
     df_fits_tot <- trajData %>%
-      dplyr::select(year, month, num_samples, lifeform, abundance) %>%
-      group_by(month, year, lifeform) %>%
+      dplyr::select(assess_id, year, month, num_samples, lifeform, abundance) %>%
+      group_by(assess_id, month, year, lifeform) %>%
       dplyr::summarise(abundance_mean = mean(abundance, na.rm=T),
                        .groups="drop") %>%
       filter(!is.nan(abundance_mean)) %>%
-      group_by(lifeform) %>%
+      group_by(assess_id, lifeform) %>%
       dplyr::mutate(count = n()) %>%
       filter(count >= 3) %>%
       dplyr::mutate(month=as.integer(month),
@@ -336,7 +457,7 @@ kendallAll <- function(x, seasonal=FALSE){
       unnest_wider(p.value) %>%
       do(janitor::clean_names(.)) %>%
       dplyr::rename("p.value"=z_trend) %>%
-      dplyr::select(lifeform, statistic, p.value)
+      dplyr::select(assess_id, lifeform, statistic, p.value)
     
   }
   
@@ -344,11 +465,12 @@ kendallAll <- function(x, seasonal=FALSE){
   df_fits_tot$sig <- ifelse(df_fits_tot$p.value <= 0.05, TRUE, FALSE)
   
   #simplify the dataframe output
-  df_fits_tot <- data.frame(lifeform = df_fits_tot$lifeform,
+  df_fits_tot <- data.frame(assess_id = df_fits_tot$assess_id,
+                            lifeform = df_fits_tot$lifeform,
                             statistic = df_fits_tot$statistic,
                             p = df_fits_tot$p.value,
                             sig = df_fits_tot$sig) %>%
-    arrange(lifeform)
+    arrange(assess_id, lifeform)
   
   
   
@@ -357,13 +479,13 @@ kendallAll <- function(x, seasonal=FALSE){
 
 
 #function to prepare the data to be plotted as time-series
-create_ts <- function(x, y, limits, ids){
+create_ts <- function(x, y){
   
   #generate relevant dataset within year limits
   trajData <- x
   
   #match model results to new plotting dataframe
-  df_plot <- merge(trajData, y, by=c("lifeform"))
+  df_plot <- merge(trajData, y, by=c("assess_id", "lifeform"))
   
   #convert year and month variables to date format
   df_plot$date_mon <- as.Date(paste(df_plot$year, df_plot$month, 16), "%Y %m %d")
@@ -373,10 +495,10 @@ create_ts <- function(x, y, limits, ids){
   df_plot <- df_plot %>%
     dplyr::mutate(year=as.integer(year)) %>%
     filter(!is.na(abundance)) %>%
-    group_by(lifeform) %>%
+    group_by(lifeform, assess_id) %>%
     dplyr::mutate(sumSamples = sum(num_samples, na.rm=T),
                   prop_years = length(unique(year) %in% seq(min(year), max(year), 1)) / length(seq(min(year), max(year), 1))) %>%
-    ungroup()
+    ungroup() #ensure that threshold number of samples are included in each dataset
 
   return(df_plot)
 }
@@ -386,7 +508,8 @@ create_ts <- function(x, y, limits, ids){
 plot_ts <- function(x){
   
   #create labeller lookup table
-  df_lookup_main <- data.frame(lifeform=x$lifeform) %>%
+  df_lookup_main <- data.frame(assess_id = x$assess_id,
+                               lifeform = x$lifeform) %>%
     dplyr::mutate(string = paste0('Kendall: ', round(x$statistic, 2), '   ', 
                                   'p: ', ifelse(x$p <= 0.05, "<=0.05", round(x$p,3)), '  ',
                                   'n: ', x$sumSamples)) %>%
@@ -408,9 +531,17 @@ plot_ts <- function(x){
     temp <- x_temp %>%
       filter(lifeform == lf_temp)
     
-    df_lookup_temp_id <- setNames(df_lookup_temp$string, df_lookup_temp$lifeform)
+    sub_plot_list <- list()
+    for(j in 1:length(unique(temp$assess_id))){
+      
+      assess_id_temp <- sort(unique(temp$assess_id))[j]
+      
+      #subset to polygon of interest
+      df_lookup_temp_id <- unique(subset(df_lookup_temp, assess_id == assess_id_temp))
+      df_lookup_temp_id <- setNames(df_lookup_temp_id$string, df_lookup_temp_id$assess_id)
       
       temp_params <- temp %>%
+        filter(assess_id == assess_id_temp) %>%
         dplyr::select(year, abundance)
       
       years <- c(min(temp_params$year),max(temp_params$year))
@@ -429,6 +560,7 @@ plot_ts <- function(x){
       }
       
       gg_panel <- temp %>%
+        filter(assess_id == assess_id_temp) %>%
         group_by(year) %>%
         dplyr::mutate(abundance_annual = mean(abundance, na.rm=T)) %>%
         ungroup() %>%
@@ -441,7 +573,7 @@ plot_ts <- function(x){
                     method = 'lm', se = FALSE) +
         geom_line(aes(date_year, abundance_annual), colour="blue", size=1)+
         geom_point(aes(date_year, abundance_annual), shape=21, fill="blue")+
-        facet_wrap(~lifeform, ncol=1, scales="free_y", labeller = labeller(lifeform=df_lookup_temp_id))+
+        facet_wrap(~assess_id, ncol=1, scales="free_y", labeller = labeller(assess_id=df_lookup_temp_id))+
         scale_x_date(breaks = years, date_labels = "%Y",
                      minor_breaks = NULL)+
         scale_y_continuous(name=bquote(log[10]* "(" * .(lf_temp) * ")"), minor_breaks = NULL, breaks=y_bks)+
@@ -453,42 +585,50 @@ plot_ts <- function(x){
               axis.title.x = element_blank(),
               legend.position = "none")
       
-    plot_list[[lf_temp]] <- gg_panel
+      sub_plot_list[[assess_id_temp]] <- gg_panel
+    }
+    plot_list[[lf_temp]] <- sub_plot_list
   }
-  return(plot_list)
+return(plot_list)
 }
 
 
 #function to select, combine and save the combined plots
-combine_pi_plots <- function(x, y, z, limits, path){
-  
-  #generate directory for the plots
-  #output_path_traj <- paste(path, "timeseries_", limits[1], "_to_", limits[2], "/", sep="")
-  #dir.create(file.path(output_path_traj), showWarnings = FALSE)
-  
-  for(i in 1:length(x)){
-    
-    lf1 <- unlist(strsplit(names(x)[i], "-"))[1]
-    lf2 <- unlist(strsplit(names(x)[i], "-"))[2]
-    
-    lf_pair_temp <- paste0(lf1,"-", lf2) 
-    lf_pair_plot <- x[[lf_pair_temp]]
-    
-    lf1_plot <- y[[lf1]]
-    lf2_plot <- y[[lf2]]
-    
-    #print an output to provide the user with a sense of progress
-    print(paste0("lifeform pair: ", paste0(lf1,"-", lf2)))
-      
-    temp_plot <- grid.arrange(lf_pair_plot, grid.arrange(lf1_plot, lf2_plot), 
-                                nrow = 1, 
-                                widths=c(1,2.5))
-      
-    #create the filename
-    filename_temp <- paste0(path, paste0(lf1,"-", lf2,".png"))
-      
-    ggsave(temp_plot, file=filename_temp,
-            height=15, width=45, units="cm", bg="white")
+combine_pi_plots <- function(x, y, limits, path){
 
+    data_id_plot <- x
+    data_id_lf_plot <- y
+    
+    for(i in 1:length(data_id_plot)){
+      
+      lf1 <- unlist(strsplit(names(data_id_plot)[i], "-"))[1]
+      lf2 <- unlist(strsplit(names(data_id_plot)[i], "-"))[2]
+      
+      lf_pair_temp <- paste0(lf1,"-", lf2) 
+      lf_pair_plot <- data_id_plot[[lf_pair_temp]]
+      
+      lf1_plot <- data_id_lf_plot[[lf1]]
+      lf2_plot <- data_id_lf_plot[[lf2]]
+      
+      assess_ids <- intersect(names(lf1_plot), names(lf2_plot))
+      assess_ids <- intersect(assess_ids, names(lf_pair_plot))
+      
+      for(j in 1:length(assess_ids)){
+        
+        assess_id_temp <- assess_ids[j]
+        
+        #print an output to provide the user with a sense of progress
+        print(paste0("lifeform pair: ", paste0(lf1,"-", lf2), ", ", "assess_id: ", assess_id_temp))
+        
+        temp_plot <- grid.arrange(lf_pair_plot[[assess_id_temp]], grid.arrange(lf1_plot[[assess_id_temp]], lf2_plot[[assess_id_temp]]), 
+                                  nrow = 1, 
+                                  widths=c(1,2.5))
+        
+        #create the filename
+        filename_temp <- paste0(path, assess_id_temp, "_", paste0(lf1,"-", lf2,".png"))
+        
+        ggsave(temp_plot, file=filename_temp,
+               height=15, width=45, units="cm", bg="white")
+      }
   }
 }
