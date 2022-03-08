@@ -354,7 +354,7 @@ plot_ts <- function(x){
   
   #create labeller lookup table
   df_lookup_main <- data.frame(lifeform=x$lifeform) %>%
-    dplyr::mutate(string = paste0('z: ', round(x$statistic, 2), '   ', 
+    dplyr::mutate(string = paste0('Kendall: ', round(x$statistic, 2), '   ', 
                                   'p: ', ifelse(x$p <= 0.05, "<=0.05", round(x$p,3)), '  ',
                                   'n: ', x$sumSamples)) %>%
     distinct()
