@@ -284,28 +284,61 @@ plot_env <- function(x, y, z, lf, pi){
 
 
 #function for modelling change in lifeforms over time with Kendall test
-kendallAll <- function(x){
+kendallAll <- function(x, seasonal=FALSE){
   
   #generate relevant dataset within year limits
   trajData <- x
   
-  #model annual change in abundance of each group in each spatial unit
-  df_fits_tot <- trajData %>%
-    dplyr::select(year, month, num_samples, lifeform, abundance) %>%
-    group_by(year, lifeform) %>%
-    dplyr::summarise(abundance_mean = mean(abundance, na.rm=T),
-                     .groups="drop") %>%
-    filter(!is.nan(abundance_mean)) %>%
-    group_by(lifeform) %>%
-    dplyr::mutate(count = n()) %>%
-    filter(count >= 3) %>%
-    dplyr::mutate(year=as.integer(year)) %>%
-    nest() %>%
-    mutate(fits = map(data, ~EnvStats::kendallTrendTest(abundance_mean ~ year, ci.slope=FALSE, data=.x)),
-           fits2 = map(fits, ~structure(.x, class="htest")),
-           fits3 = map(fits2, ~tidy(.x))) %>%
-    dplyr::select(-c(data, fits, fits2)) %>%
-    unnest_wider(fits3)
+  if(seasonal == FALSE){
+    
+    #model annual change in abundance of each group in each spatial unit
+    df_fits_tot <- trajData %>%
+      dplyr::select(year, month, num_samples, lifeform, abundance) %>%
+      group_by(year, lifeform) %>%
+      dplyr::summarise(abundance_mean = mean(abundance, na.rm=T),
+                       .groups="drop") %>%
+      filter(!is.nan(abundance_mean)) %>%
+      group_by(lifeform) %>%
+      dplyr::mutate(count = n()) %>%
+      filter(count >= 3) %>%
+      dplyr::mutate(year=as.integer(year)) %>%
+      nest() %>%
+      mutate(fits = map(data, ~EnvStats::kendallTrendTest(abundance_mean ~ year, ci.slope=FALSE, data=.x)),
+             fits2 = map(fits, ~structure(.x, class="htest")),
+             fits3 = map(fits2, ~tidy(.x))) %>%
+      dplyr::select(-c(data, fits, fits2)) %>%
+      unnest_wider(fits3)
+    
+  } else {
+    
+    #model annual change in abundance of each group in each spatial unit
+    df_fits_tot <- trajData %>%
+      dplyr::select(year, month, num_samples, lifeform, abundance) %>%
+      group_by(month, year, lifeform) %>%
+      dplyr::summarise(abundance_mean = mean(abundance, na.rm=T),
+                       .groups="drop") %>%
+      filter(!is.nan(abundance_mean)) %>%
+      group_by(lifeform) %>%
+      dplyr::mutate(count = n()) %>%
+      filter(count >= 3) %>%
+      dplyr::mutate(month=as.integer(month),
+                    year=as.integer(year)) %>%
+      nest() %>%
+      mutate(fits = map(data, ~EnvStats::kendallSeasonalTrendTest(abundance_mean ~ month + year, ci.slope=FALSE, data=.x)),
+             fits2 = map(fits, ~structure(.x, class="htest")),
+             fits3 = map(fits2, ~tidy(.x))) %>%
+      dplyr::select(-c(data, fits, fits2)) %>%
+      unnest_wider(fits3) %>%
+      unnest_wider(statistic) %>%
+      do(janitor::clean_names(.)) %>%
+      dplyr::rename("statistic"=z_trend,
+                    "p.value"=p_value) %>%
+      unnest_wider(p.value) %>%
+      do(janitor::clean_names(.)) %>%
+      dplyr::rename("p.value"=z_trend) %>%
+      dplyr::select(lifeform, statistic, p.value)
+    
+  }
   
   #column to code whether p-value is significant
   df_fits_tot$sig <- ifelse(df_fits_tot$p.value <= 0.05, TRUE, FALSE)
