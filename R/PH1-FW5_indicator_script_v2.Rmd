@@ -147,11 +147,21 @@ df_plot <- create_ts(x=df, y=df_fits_tot)
 #function for plotting time-series
 ts_plots <- plot_ts(x=df_plot)
 ```
+Ensure empty output directory
+```{r, include=FALSE}
+do.call(file.remove, list(list.files(dir_out, full.names = TRUE)))
+```
 Combine the PI plots with the relevant time-series and output figures to disk
 ```{r, include=FALSE}
 #function to select, combine and save the combined plots (saved to output subdirectory)
 combine_pi_plots(x=env_plots, y=ts_plots, limits=range(df_plot$year), path=dir_out)
 ```
+Generate an Excel output for indicator results
+```{r}
+list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults)
+openxlsx::write.xlsx(list_of_datasets, file = paste0(dir_out, "PH1_results", ".xlsx"), overwrite = TRUE)
+```
+
 
 
 
