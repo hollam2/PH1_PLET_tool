@@ -228,11 +228,11 @@ plot_env <- function(x, y, z, lf, pi){
     df_inner$subid <- 2L
     df_polys <- rbind(df_outer, df_inner)
     
-    temp_ref <- y %>% dplyr::select(1:4, temp_lf) %>%
+    temp_ref <- y %>% dplyr::select(1:4, all_of(temp_lf)) %>%
       arrange(year, month)
     names(temp_ref)[c(ncol(temp_ref)-1,ncol(temp_ref))] <- c("vx", "vy")
     
-    temp_comp <- z %>% dplyr::select(1:4, temp_lf) %>%
+    temp_comp <- z %>% dplyr::select(1:4, all_of(temp_lf)) %>%
       arrange(year, month)
     names(temp_comp)[c(ncol(temp_comp)-1,ncol(temp_comp))] <- c("vx", "vy")
     
