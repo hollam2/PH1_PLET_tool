@@ -58,13 +58,16 @@ dir.create(file.path(dir_out), showWarnings = FALSE)
 Read in the plankton lifeforms data - exclude the last line which contains the total abundances
 ```{r}
 #load the lifeform data and clean up names
-df <- head(fread(paste0(dir_data, file_lf)),-1) %>%
+df <- fread(paste0(dir_data, file_lf)) %>%
+  filter(nchar(period) == 7) %>% # remove rows where total abundance is summed
   do(janitor::clean_names(.)) %>%
-  do(as.data.frame(.))
+  do(as.data.frame(.)) %>%
+  dplyr::select(-c(taxa_used, abundance_type))
 ```
 Generate a string for the lifeforms contained in the dataset
 ```{r}
-id_vars <- c("period", "num_samples", "abundance_type", "taxa_used")
+id_vars <- c("polygon_wkt", "period", "num_samples")
+id_vars <- id_vars[id_vars %in% colnames(df)]
 lf_list <- colnames(df)[!(colnames(df) %in% id_vars)]
 ```
 Clean the data and convert lifeform data to long format
@@ -98,10 +101,30 @@ df <- cbind(dates, df) %>%
 
 rm(dates)
 ```
+Replace polygon coordinates with a unique identifier (if multipolygon data)
+```{r}
+if("polygon_wkt" %in% colnames(df)){
+  polys <- as.factor(unique(df$polygon_wkt))
+  polys_new <- paste0(as.numeric(polys))
+  
+  df_assess_id <- data.frame(polygon_wkt=polys,
+                         assess_id=polys_new)
+  
+  df <- df %>%
+    left_join(df_assess_id) %>%
+    mutate(polygon_wkt = assess_id,
+           assess_id=NULL) %>%
+    rename("assess_id" = polygon_wkt)
+} else {
+  
+  df$assess_id <- "1"
+  
+}
+```
 Replace 0 values with 0.5* the min value for the lifeform so data can be log10 transformed
 ```{r}
 df <- df %>%
-  group_by(lifeform) %>%
+  group_by(assess_id, lifeform) %>%
   dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%
   dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%
   ungroup() %>%
@@ -113,7 +136,7 @@ Quality control steps from Bedford et al. (2020) in GCB. "Lifeform indicators re
 df <- clean_years(x=df, thr=mon_thr)
 
 #function for filling month gaps in the time series using temporal interpolation with a max gap of 3 months as default
-df <- fill_gaps(df, max_gap = 3)
+df <- fill_gaps(x=df, max_gap = 3)
 ```
 Define the reference and comparison datasets
 ```{r}
@@ -158,7 +181,12 @@ combine_pi_plots(x=env_plots, y=ts_plots, limits=range(df_plot$year), path=dir_o
 ```
 Generate an Excel output for indicator results
 ```{r}
-list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults)
+if(exists("df_assess_id")){
+  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults, "Assessment_ids" = df_assess_id)
+} else {
+  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults)
+}
+
 openxlsx::write.xlsx(list_of_datasets, file = paste0(dir_out, "PH1_results", ".xlsx"), overwrite = TRUE)
 ```
 
