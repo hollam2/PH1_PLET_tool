@@ -49,7 +49,7 @@ fill_gaps <- function(x, max_gap = 3){
 
 #construct a dataframe of relevant lifeform pair comparisons
 df_lf <- rbind(data.frame(V1 = "diatom", V2 = "dinoflagellate"),
-               data.frame(V1 = "tycho_diatoms", V2 = "pelagic_diatoms"),
+               data.frame(V1 = "tychopelagic_diatoms", V2 = "pelagic_diatoms"),
                data.frame(V1 = "lg_copepods", V2 = "sm_copepods"),
                data.frame(V1 = "holoplankton", V2 = "meroplankton"),
                data.frame(V1 = "lg_phyto", V2 = "sm_phyto"),
@@ -62,9 +62,8 @@ df_lf <- rbind(data.frame(V1 = "diatom", V2 = "dinoflagellate"),
 dataSelect <- function(x, lf, lims){
   
   output <- x %>%
-    filter(lifeform %in% as.vector(unlist(lf)),
+    filter(lifeform %in% all_of(as.vector(unlist(lf))),
            year>=lims[1] & year<=lims[2]) %>%
-    ungroup() %>%
     pivot_wider(names_from = lifeform, values_from = abundance)
   
   return(output)
@@ -81,7 +80,7 @@ find_envAll <- function(x, lf){
   x_temp <- x_temp[,colSums(is.na(x_temp))<nrow(x_temp)]
   
   lf_temp <- lf %>%
-    filter(V1 %in% all_of(colnames(x_temp)),
+    filter(V1 %in% all_of(colnames(x_temp)) &
            V2 %in% all_of(colnames(x_temp)))
   
   main_outer <- data.frame()
@@ -169,7 +168,7 @@ PIcalcAll <- function(x, y, z, lf){
         piPts <- PIcalc(compDat, envelopePts, 0.9)
         piPts <- do.call(cbind.data.frame, piPts)
         piPts$refPoints <- df_refPoints$refPoints[1]
-        piPts$lf_pair <- paste(temp_lf, collapse="-")
+        piPts <- cbind(lf_pair=paste(temp_lf, collapse="-"), piPts)
       }
     
     main_output <- rbind(main_output, piPts)
@@ -431,9 +430,8 @@ plot_ts <- function(x){
 combine_pi_plots <- function(x, y, z, limits, path){
   
   #generate directory for the plots
-  output_path_traj <- paste(path, "timeseries_", limits[1], "_to_", limits[2], "/", sep="")
-  dir.create(file.path(output_path_traj), showWarnings = FALSE)
-  do.call(file.remove, list(list.files(output_path_traj, full.names = TRUE)))
+  #output_path_traj <- paste(path, "timeseries_", limits[1], "_to_", limits[2], "/", sep="")
+  #dir.create(file.path(output_path_traj), showWarnings = FALSE)
   
   for(i in 1:length(x)){
     
@@ -454,7 +452,7 @@ combine_pi_plots <- function(x, y, z, limits, path){
                                 widths=c(1,2.5))
       
     #create the filename
-    filename_temp <- paste0(output_path_traj, paste0(lf1,"-", lf2,".png"))
+    filename_temp <- paste0(path, paste0(lf1,"-", lf2,".png"))
       
     ggsave(temp_plot, file=filename_temp,
             height=15, width=45, units="cm", bg="white")
