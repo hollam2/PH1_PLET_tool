@@ -27,7 +27,6 @@ ref_years <- c(2015, 2019)
 comp_years <- c(1960, 2014)
 
 #lifeform abundance dataset filename
-#example multipolygon MULTIPOLYGON (((1 60,3 60,3 58, 1 58,1 60)),((1 55,3 55,3 53, 1 53,1 55)))
 file_lf <- "lifeform.csv"
 
 #set threshold for minimum number of months out of the year required for an assessment area to be included
@@ -42,7 +41,7 @@ lapply(list.of.packages, require, character.only = TRUE)
 rm(list.of.packages, new.packages)
 
 #load the supporting functions
-source("Supporting_scripts/new_20062021.R")
+source("Supporting_scripts/PI_functions_v1.R")
 source("Supporting_scripts/Supporting_functions_v2.R")
 ```
 Specify subdirectories for data if not already done
@@ -102,34 +101,13 @@ df <- cbind(dates, df) %>%
 
 rm(dates)
 ```
-Replace polygon coordinates with a unique identifier (if multipolygon data)
+Replace polygon coordinates with a unique identifier (automatically detect if it is multipolygon data)
 ```{r}
-if("polygon_wkt" %in% colnames(df)){
-  polys <- as.factor(unique(df$polygon_wkt))
-  polys_new <- paste0(as.numeric(polys))
-  
-  df_assess_id <- data.frame(polygon_wkt=polys,
-                         assess_id=polys_new)
-  
-  df <- df %>%
-    left_join(df_assess_id) %>%
-    mutate(polygon_wkt = assess_id,
-           assess_id=NULL) %>%
-    rename("assess_id" = polygon_wkt)
-} else {
-  
-  df$assess_id <- "1"
-  
-}
+df <- create_assess_id(x=df)
 ```
-Replace 0 values with 0.5* the min value for the lifeform so data can be log10 transformed
+Add 0.5* the min value for the lifeform (method=1) or 1 (method=2) and log10 transform the data
 ```{r}
-df <- df %>%
-  group_by(assess_id, lifeform) %>%
-  dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%
-  dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%
-  ungroup() %>%
-  dplyr::select(-min_non_zero)
+df <- log_transform(df, method=1)
 ```
 Quality control steps from Bedford et al. (2020) in GCB. "Lifeform indicators reveal large-scale shifts in plankton across the North-West European shelf"
 ```{r}
@@ -144,6 +122,10 @@ Define the reference and comparison datasets
 #function for extracting a dataframe for a particular time period
 df_ref <- dataSelect(x=df, lf=df_lf, lims=ref_years)
 df_comp <- dataSelect(x=df, lf=df_lf, lims=comp_years)
+```
+Quality control steps to ensure PI results are reliable
+```{r}
+df_ref <- qc_ref(x=df_ref, ind_years = 3, ind_months = 30, rep_months = 2)
 ```
 Calculate the lifeform pairs indicator reference envelope for each spatial unit in the dataset and compute the lifeform pairs indicator (PI)
 ```{r}
