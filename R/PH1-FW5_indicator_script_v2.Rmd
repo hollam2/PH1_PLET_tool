@@ -24,9 +24,10 @@ options(scipen=999)
 ref_years <- c(2015, 2019)
 
 #enter the range of years covered by the comparison period (this is used to determine the comparison data)
-comp_years <- c(2000, 2014)
+comp_years <- c(1960, 2014)
 
 #lifeform abundance dataset filename
+#example multipolygon MULTIPOLYGON (((1 60,3 60,3 58, 1 58,1 60)),((1 55,3 55,3 53, 1 53,1 55)))
 file_lf <- "lifeform.csv"
 
 #set threshold for minimum number of months out of the year required for an assessment area to be included
