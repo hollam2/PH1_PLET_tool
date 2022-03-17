@@ -1,5 +1,58 @@
 #functions for PH1/FW5 code
 
+
+#function for adding an assessment area ID to the data, depending on whether using polygon or multipolygon data. 
+create_assess_id <- function(x){
+  
+  if("polygon_wkt" %in% colnames(x)){
+    polys <- factor(unique(x$polygon_wkt), levels=unique(x$polygon_wkt))
+    polys_new <- paste0(as.numeric(polys))
+    
+    df_assess_id <- data.frame(polygon_wkt=polys,
+                               assess_id=polys_new)
+    
+    output <- x %>%
+      left_join(df_assess_id) %>%
+      mutate(polygon_wkt = assess_id,
+             assess_id=NULL) %>%
+      rename("assess_id" = polygon_wkt)
+  } else {
+    
+    output <- x %>%
+      mutate(assess_id = "1")
+    
+  }
+  
+  return(output)
+}
+
+
+#function for log transforming the abundance data
+log_transform <- function(x, method=1){
+  
+  if(method==1){
+    
+    output <- x %>%
+      group_by(assess_id, lifeform) %>%
+      dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%
+      dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%
+      ungroup() %>%
+      dplyr::select(-min_non_zero)
+    
+  } else if(method==2) {
+    
+    output <- x %>%
+      dplyr::mutate(abundance = log10(abundance + 1))
+    
+  } else {
+    
+    print("ERROR: invalid input for method")
+    
+  }
+  
+  return(output)
+}
+
 #function for remove years from time series with less than n months of interpolated data and determine proportion of years removed
 clean_years <- function(x, thr){
   
@@ -25,19 +78,25 @@ clean_years <- function(x, thr){
       mutate(prop_years_removed = ifelse(is.na(prop_years_removed), 0, prop_years_removed)) %>%
       arrange(assess_id)
     
-      print(print_out)
+    output <- x %>%
+      left_join(data.frame(assess_id=temp$assess_id,
+                           year=temp$year,
+                           exclude=TRUE),
+                by=c("assess_id", "year")) %>%
+      mutate(exclude = ifelse(is.na(exclude),FALSE,TRUE)) %>%
+      mutate(abundance = ifelse(exclude==TRUE, NA, abundance)) %>%
+      dplyr::select(-exclude)
+    
+    print(print_out)
+    
   } else {
+    
+    output <- x
+    
     print(paste("No years removed"))
   }
   
-   output <- x %>%
-    left_join(data.frame(assess_id=temp$assess_id,
-                         year=temp$year,
-                         exclude=TRUE),
-              by=c("assess_id", "year")) %>%
-    mutate(exclude = ifelse(is.na(exclude),FALSE,TRUE)) %>%
-    mutate(abundance = ifelse(exclude==TRUE, NA, abundance)) %>%
-    dplyr::select(-exclude)
+   
   
   return(output)
 }
@@ -87,6 +146,7 @@ df_lf <- rbind(data.frame(V1 = "diatom", V2 = "dinoflagellate"),
                data.frame(V1 = "gelatinous", V2 = "fishlarvae")
 )
 
+
 #function for extracting a dataframe for a particular time period
 dataSelect <- function(x, lf, lims){
   
@@ -94,11 +154,37 @@ dataSelect <- function(x, lf, lims){
     filter(lifeform %in% all_of(as.vector(unlist(lf))),
            year>=lims[1] & year<=lims[2]) %>%
     pivot_wider(names_from = lifeform, values_from = abundance) %>%
-    arrange(assess_id, year, month)
+    arrange(assess_id, year, month) %>%
+    relocate(assess_id)
   
   return(output)
 }
 
+
+#quality control steps to ensure PI results are reliable
+qc_ref <- function(x, ind_years = 3, ind_months = 30, rep_months = 2){
+  
+  output <- x %>%
+    dplyr::select(year, month, assess_id, num_samples) %>%
+    filter(num_samples > 0) %>%
+    group_by(assess_id) %>%
+    filter(length(unique(year)) >= ind_years) %>% # at least three years of non-interpolated samples
+    filter(length(unique(paste(year,month))) >= ind_months) %>% # at least 30 individual months represented
+    ungroup() %>%
+    group_by(assess_id, month) %>%
+    filter(length(unique(year)) >= rep_months) %>% # each month represented at least twice
+    ungroup() %>%
+    dplyr::select(assess_id) %>%
+    distinct() %>%
+    left_join(df_ref, by="assess_id") #subset the reference data to remove assessment areas which do not meet minimum criteria
+  
+  #message to user to inform why the script fails if no assessment areas pass this step
+  if(nrow(output) == 0){
+    print("ERROR: The reference data do not meet the minimum criteria for the indicator assessment")
+  }
+  
+  return(output)
+}
 
 
 #function to prepare the reference envelopes for the multiple lifeform pairs comparisons
