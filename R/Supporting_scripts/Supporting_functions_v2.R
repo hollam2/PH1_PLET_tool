@@ -99,69 +99,6 @@ dataSelect <- function(x, lf, lims){
   return(output)
 }
 
-#function to prepare the reference envelopes for the multiple lifeform pairs comparisons
-find_envAll <- function(x, lf){
-  
-  lf_data_id <- lf %>%
-    filter(V1 %in% all_of(colnames(x)),
-           V2 %in% all_of(colnames(x)))
-  
-    main_outer <- data.frame()
-    main_inner <- data.frame()
-    for(i in 1:nrow(lf_data_id)){
-      temp_lf <- as.vector(unlist(lf_data_id[i,]))
-      
-      temp_x <- x %>%
-        dplyr::select(polygon, all_of(temp_lf))
-      
-      polygon_list <- sort(unique(temp_x$polygon))
-      
-      df_outer <- data.frame()
-      df_inner <- data.frame()
-      for(j in 1:length(polygon_list)){
-        temp_pair <- subset(temp_x, polygon == polygon_list[j])
-        
-        #command to skip envelope fitting for data with no variance
-        abort <- ifelse(sd(as.vector(unlist(temp_pair[,2]))) == 0 | sd(as.vector(unlist(temp_pair[,3])))==0, TRUE, FALSE)
-        
-        if(abort==FALSE){
-          
-          envPts <- findEvn(as.vector(unlist(temp_pair[,2])),
-                            as.vector(unlist(temp_pair[,3])),
-                            p=0.9,
-                            sc=TRUE)
-          envPts_unlist <- rbindlist(envPts, fill=TRUE)
-          temp_outer <- data.frame(outX=envPts_unlist$outX[complete.cases(envPts_unlist$outX)],
-                                   outY=envPts_unlist$outY[complete.cases(envPts_unlist$outY)],
-                                   polygon = polygon_list[j])
-          temp_inner <- data.frame(inX=envPts_unlist$inX[complete.cases(envPts_unlist$inX)],
-                                   inY=envPts_unlist$inY[complete.cases(envPts_unlist$inY)],
-                                   polygon = assess_id_list[j])
-          
-          df_outer <- rbind(df_outer, temp_outer)
-          df_inner <- rbind(df_inner, temp_inner)
-        }
-      }
-      
-      if(nrow(df_outer) > 0 & nrow(df_inner) > 0){
-        
-        df_outer$lf_pair <- paste(temp_lf, collapse="-")
-        df_inner$lf_pair <- paste(temp_lf, collapse="-")
-        
-        df_outer$data_id <- temp_data_id
-        df_inner$data_id <- temp_data_id
-        
-        main_outer <- rbind(main_outer, df_outer)
-        main_inner <- rbind(main_inner, df_inner)
-        
-      }
-    }
-    data_id_outer <- rbind(data_id_outer, main_outer)
-    data_id_inner <- rbind(data_id_inner, main_inner)
-  
-  main_list <- list(data_id_outer, data_id_inner)
-  return(main_list)
-}
 
 
 #function to prepare the reference envelopes for the multiple lifeform pairs comparisons
