@@ -34,6 +34,7 @@ log_transform <- function(x, method=1){
     
     output <- x %>%
       group_by(assess_id, lifeform) %>%
+      filter(!all(abundance == 0)) %>%
       dplyr::mutate(min_non_zero = min(abundance[abundance != min(abundance, na.rm=T)], na.rm=T)) %>%
       dplyr::mutate(abundance = log10(abundance + min_non_zero*0.5)) %>%
       ungroup() %>%
@@ -76,7 +77,7 @@ clean_years <- function(x, thr){
       distinct() %>%
       bind_rows(data.frame(assess_id=unique(x$assess_id)[!unique(x$assess_id) %in% temp$assess_id] )) %>%
       mutate(prop_years_removed = ifelse(is.na(prop_years_removed), 0, prop_years_removed)) %>%
-      arrange(assess_id)
+      arrange(as.integer(assess_id))
     
     output <- x %>%
       left_join(data.frame(assess_id=temp$assess_id,
@@ -123,7 +124,8 @@ fill_gaps <- function(x, max_gap = 3){
     dplyr::summarise(prop_months_filled = length(!is.na(abundance_interp) & is.na(abundance)) / length(is.na(abundance)),
                      .groups="drop") %>%
     dplyr::select(-lifeform) %>%
-    distinct()
+    distinct() %>%
+    arrange(as.integer(assess_id))
   
   print(print_out)
   
@@ -216,7 +218,10 @@ find_envAll <- function(x, lf){
         temp_pair <- subset(temp_x, assess_id == assess_id_list[j])
         
         #command to skip envelope fitting for data with no variance
-        abort <- ifelse(sd(as.vector(unlist(temp_pair[,2]))) == 0 | sd(as.vector(unlist(temp_pair[,3])))==0, TRUE, FALSE)
+        abort <- ifelse(sd(as.vector(unlist(temp_pair[,2]))) == 0 | 
+                          sd(as.vector(unlist(temp_pair[,3])))==0 |
+                          all(is.na(as.vector(unlist(temp_pair[,2])))) |
+                          all(is.na(as.vector(unlist(temp_pair[,3])))), TRUE, FALSE)
         
         if(abort==FALSE){
           
@@ -634,11 +639,11 @@ combine_pi_plots <- function(x, y, limits, path){
       lf2_plot <- data_id_lf_plot[[lf2]]
       
       assess_ids <- intersect(names(lf1_plot), names(lf2_plot))
-      assess_ids <- intersect(assess_ids, names(lf_pair_plot))
+      assess_ids <- sort(as.integer(intersect(assess_ids, names(lf_pair_plot))))
       
       for(j in 1:length(assess_ids)){
         
-        assess_id_temp <- assess_ids[j]
+        assess_id_temp <- as.character(assess_ids[j])
         
         #print an output to provide the user with a sense of progress
         print(paste0("lifeform pair: ", paste0(lf1,"-", lf2), ", ", "assess_id: ", assess_id_temp))
