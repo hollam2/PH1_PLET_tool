@@ -103,7 +103,10 @@ rm(dates)
 ```
 Replace polygon coordinates with a unique identifier (automatically detect if it is multipolygon data)
 ```{r}
-df <- create_assess_id(x=df)
+assess_list <- create_assess_id(x=df)
+
+df <- assess_list[[1]]
+df_assess_id <- assess_list[[2]]
 ```
 Add 0.5* the min value for the lifeform (method=1) or 1 (method=2) and log10 transform the data
 ```{r}
@@ -164,7 +167,7 @@ combine_pi_plots(x=env_plots, y=ts_plots, limits=range(df_plot$year), path=dir_o
 ```
 Generate an Excel output for indicator results
 ```{r}
-if(exists("df_assess_id")){
+if(nrow(df_assess_id) > 1){
   list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults, "Assessment_ids" = df_assess_id)
 } else {
   list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults)

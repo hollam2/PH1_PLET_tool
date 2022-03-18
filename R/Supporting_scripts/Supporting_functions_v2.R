@@ -11,18 +11,25 @@ create_assess_id <- function(x){
     df_assess_id <- data.frame(polygon_wkt=polys,
                                assess_id=polys_new)
     
-    output <- x %>%
+    temp <- x %>%
       left_join(df_assess_id) %>%
       mutate(polygon_wkt = assess_id,
              assess_id=NULL) %>%
       rename("assess_id" = polygon_wkt)
+
   } else {
     
-    output <- x %>%
+    df_assess_id <- data.frame(polygon_wkt=NA,
+                               assess_id="1")
+    
+    temp <- x %>%
       mutate(assess_id = "1")
     
   }
   
+  output <- list()
+  output[[1]] <- temp
+  output[[2]] <- df_assess_id
   return(output)
 }
 
@@ -317,7 +324,9 @@ PIcalcAll <- function(x, y, z, lf){
       main_output <- rbind(main_output, piList)
     }
     
-    main_output <- dplyr::rename(main_output, binomialProbability = 'binomial probability')
+    main_output <- dplyr::rename(main_output, binomialProbability = 'binomial probability') %>%
+      relocate(assess_id) %>%
+      arrange(as.integer(assess_id), lf_pair)
 
    return(main_output)
 }
@@ -498,7 +507,7 @@ kendallAll <- function(x, seasonal=FALSE){
                             statistic = df_fits_tot$statistic,
                             p = df_fits_tot$p.value,
                             sig = df_fits_tot$sig) %>%
-    arrange(assess_id, lifeform)
+    arrange(as.integer(assess_id), lifeform)
   
   
   
