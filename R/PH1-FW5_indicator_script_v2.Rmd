@@ -12,7 +12,7 @@ Functions and supporting scripts are found in the "Supporting_scripts" subdirect
 
 Author: Matthew Holland
 Contact: matt.holland@plymouth.ac.uk
-Latest version date: 4 March 2022
+Latest version date: 18 March 2022
 ```{r}
 #clear R environment
 rm(list = ls()) 
