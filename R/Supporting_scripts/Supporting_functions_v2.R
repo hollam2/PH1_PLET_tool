@@ -77,7 +77,7 @@ clean_years <- function(x, thr){
     dplyr::mutate(prop_years_removed = length(unique(year)) / orig_year) %>% #determine proportion of years of data removed per grid cell
     ungroup()
   
-  if(nrow(temp > 0)){
+  if(nrow(temp) > 0){
     
     print_out <- temp %>%
       dplyr::select(assess_id, prop_years_removed) %>%
