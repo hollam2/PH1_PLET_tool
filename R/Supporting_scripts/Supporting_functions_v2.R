@@ -63,7 +63,7 @@ plot_polys <- function(x, buff=2){
     gg_list <- list()
     for(i in 1:nrow(x)){
       
-      temp_poly <- x$assess_id[[i]]
+      temp_poly <- as.character(x$assess_id)[[i]]
       
       gg_temp <- ggplot()+
         geom_sf(data=coast, inherit.aes=F, fill="grey80", colour="grey40", lwd = 0.2)+
@@ -634,7 +634,7 @@ plot_ts <- function(x){
     sub_plot_list <- list()
     for(j in 1:length(unique(temp$assess_id))){
       
-      assess_id_temp <- sort(unique(temp$assess_id))[j]
+      assess_id_temp <- as.character(sort(unique(temp$assess_id)))[j]
       
       #subset to polygon of interest
       df_lookup_temp_id <- unique(subset(df_lookup_temp, assess_id == assess_id_temp))
