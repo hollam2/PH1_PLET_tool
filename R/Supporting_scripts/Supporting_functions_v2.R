@@ -33,6 +33,63 @@ create_assess_id <- function(x){
   return(output)
 }
 
+#function for plotting the polygons in maps to provide a spatial reference for multipolygon data
+plot_polys <- function(x, buff=2){
+  
+  if(all(!is.na(x$polygon_wkt))){
+    
+    #load spatial packages
+    list.of.packages <- c("rnaturalearth", "rnaturalearthhires", "sf")
+    new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+    if(length(new.packages)) install.packages(new.packages, repos = "http://packages.ropensci.org", type = "source")
+    lapply(list.of.packages, require, character.only = TRUE)
+    rm(list.of.packages, new.packages)
+    
+    #load shapefile of European landmass for display
+    coast <- rnaturalearth::ne_countries(returnclass = "sf", scale = "large")
+    
+    #convert WKT string to sf object
+    polys <- st_as_sf(x, wkt="polygon_wkt")
+    st_crs(polys) <- 4326
+    polys <- st_transform(polys, crs=st_crs(coast))
+    
+    #determine appropriate plot limits
+    buff <- buff
+    lims <- as.numeric(st_bbox(polys))
+    extent_rad <- max(c(lims[3] - lims[1], lims[4] - lims[2]))/2 + buff
+    centre <- c(mean(c(lims[1], lims[3])), mean(c(lims[2], lims[4])))
+    lims <- c(centre[1]-extent_rad, centre[2]-extent_rad, centre[1]+extent_rad, centre[2]+extent_rad)
+    
+    gg_list <- list()
+    for(i in 1:nrow(x)){
+      
+      temp_poly <- x$assess_id[[i]]
+      
+      gg_temp <- ggplot()+
+        geom_sf(data=coast, inherit.aes=F, fill="grey80", colour="grey40", lwd = 0.2)+
+        geom_sf(data=polys, colour="black", fill=NA, show.legend=FALSE, lwd = 0.2)+
+        geom_sf(data=filter(polys, assess_id==temp_poly), fill="red", alpha=0.5, lwd = 0.2, show.legend=FALSE)+
+        coord_sf(xlim=c(lims[1], lims[3]), ylim=c(lims[2], lims[4]), expand=FALSE)+
+        theme_bw()+
+        theme(plot.title = element_text(hjust = 0.5),
+              axis.text.x = element_text(angle = 45, hjust=1, vjust=1),
+              axis.title.x = element_blank(),
+              axis.title.y = element_blank(),
+              legend.title=element_text(size=rel(0.5)),
+              legend.text=element_text(size=rel(0.4)),
+              legend.key=element_rect(fill=NA),
+              legend.key.size = unit(0.27, 'cm'),
+              legend.margin=margin(0,0,0,0))+
+        guides(fill=guide_legend(ncol=1))
+      
+      gg_list[[temp_poly]] <- gg_temp
+      
+    }
+    return(gg_list)
+  }  else {
+    return(NA)
+  }
+}
 
 #function for log transforming the abundance data
 log_transform <- function(x, method=1){
@@ -396,10 +453,10 @@ plot_env <- function(x, y, z, lf, pi, label, threshold){
       
       #grouping factor for colouring months
       temp_comp$month <- as.numeric(temp_comp$month)
-      temp_comp$season <- ifelse(temp_comp$month %in% c(1, 2, 12), "months: 1 2 12",
-                                 ifelse(temp_comp$month %in% c(3, 4, 5), "months: 3 4 5",
-                                        ifelse(temp_comp$month %in% c(6, 7, 8), "months: 6 7 8",
-                                               ifelse(temp_comp$month %in% c(9, 10, 11), "months: 9 10 11", "ERROR"))))
+      temp_comp$season <- ifelse(temp_comp$month %in% c(1, 2, 12), "12 1 2",
+                                 ifelse(temp_comp$month %in% c(3, 4, 5), "3 4 5",
+                                        ifelse(temp_comp$month %in% c(6, 7, 8), "6 7 8",
+                                               ifelse(temp_comp$month %in% c(9, 10, 11), "9 10 11", "ERROR"))))
       
       #Create a custom color scale
       factor_levels <- unique(temp_comp$season)
@@ -425,13 +482,19 @@ plot_env <- function(x, y, z, lf, pi, label, threshold){
           geom_point(data=subset(temp_comp, assess_id == poly),aes(x=vx, y=vy, fill=season), shape=21) +
           geom_point(data=subset(temp_ref, assess_id == poly),aes(x=vx, y=vy), shape=21, fill=NA, colour="grey60", alpha=0.5) +
           scale_x_continuous(name=bquote(log[10]* "(" * .(temp_lf[1]) * ")")) +
-          scale_y_continuous(name=bquote(log[10]* "(" * .(temp_lf[2]) * ")")) +
+          scale_y_continuous(expand=c(0.1,0), name=bquote(log[10]* "(" * .(temp_lf[2]) * ")")) +
           scale_fill_manual(values=myColors)+
           facet_wrap(~ assess_id, scales="free", labeller = labeller(assess_id=df_lookup_temp)) +
           theme_bw() +
           theme(plot.title = element_text(hjust = 0.5),
-                legend.title = element_blank(),
-                legend.position = "none")
+                legend.position = c(.5,.05),
+                legend.spacing.x = unit(0.1, 'cm'),
+                legend.direction = "horizontal",
+                legend.background = element_blank(),
+                legend.key = element_rect(fill = NA),
+                legend.text = element_text(margin = margin(t = 2)))+
+          guides(fill = guide_legend(title = "Month",
+                                   title.position = "left")) 
         
         sub_plot_list[[poly]] <- gg_panel 
       }
@@ -631,7 +694,7 @@ return(plot_list)
 
 
 #function to select, combine and save the combined plots
-combine_pi_plots <- function(x, y, limits, path){
+combine_pi_plots <- function(x, y, maps, limits, path){
 
     data_id_plot <- x
     data_id_lf_plot <- y
@@ -657,15 +720,21 @@ combine_pi_plots <- function(x, y, limits, path){
         #print an output to provide the user with a sense of progress
         print(paste0("lifeform pair: ", paste0(lf1,"-", lf2), ", ", "assess_id: ", assess_id_temp))
         
-        temp_plot <- grid.arrange(lf_pair_plot[[assess_id_temp]], grid.arrange(lf1_plot[[assess_id_temp]], lf2_plot[[assess_id_temp]]), 
-                                  nrow = 1, 
-                                  widths=c(1,2.5))
+        panels <- list(lf_pair_plot[[assess_id_temp]], lf1_plot[[assess_id_temp]], lf2_plot[[assess_id_temp]])
+
+        if(all(!is.na(maps))){
+          temp_plot <- maps[[assess_id_temp]] + panels[[1]] + (panels[[2]] / panels[[3]]) +  plot_layout(widths = c(NA, 1, 2.5))
+          width <- 45
+        } else {
+          temp_plot <- panels[[1]] + (panels[[2]] / panels[[3]]) +  plot_layout(widths = c(1, 2.5))
+          width <- 40
+        }
         
         #create the filename
         filename_temp <- paste0(path, assess_id_temp, "_", paste0(lf1,"-", lf2,".png"))
         
         ggsave(temp_plot, file=filename_temp,
-               height=15, width=45, units="cm", bg="white")
+               height=15, width=width, units="cm", bg="white")
       }
   }
 }
