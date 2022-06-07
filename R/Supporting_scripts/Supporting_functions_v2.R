@@ -388,6 +388,85 @@ PIcalcAll <- function(x, y, z, lf){
    return(main_output)
 }
 
+#function to find the lifeform pairs indicator from the reference envelopes and comparison data
+PIcalcAnnual <- function(x, y, z, lf){
+  
+  main_outer <- x[[1]]
+  main_inner <- x[[2]]
+  
+  main_output <- data.frame()
+  for(i in 1:length(unique(main_outer$lf_pair))){
+    temp_lf <- unlist(strsplit(sort(unique(main_outer$lf_pair))[i], "-"))
+    
+    df_outer <- subset(main_outer, lf_pair == paste(temp_lf, collapse="-"))
+    df_inner <- subset(main_inner, lf_pair == paste(temp_lf, collapse="-"))
+    
+    df_y <- y %>%
+      select(assess_id, temp_lf, year)
+    
+    df_z <- z %>%
+      select(assess_id, temp_lf)
+    
+    assess_ids <- intersect(unique(df_y$assess_id), unique(df_z$assess_id))
+    
+    piList <- data.frame()
+    for(j in 1:length(assess_ids)){
+      
+      assess_id_temp <- assess_ids[j]
+      
+      temp_outer <- subset(df_outer, assess_id == assess_id_temp)
+      temp_inner <- subset(df_inner, assess_id == assess_id_temp)
+      
+      temp_y <- df_y %>%
+        filter(assess_id == assess_id_temp)
+      
+      yrList <- data.frame()
+      for(yr in 1:length(unique(temp_y$year))){
+        
+        year_temp <- sort(unique(temp_y$year))[yr]
+        
+        temp_y_yr <- temp_y %>%
+          filter(year == year_temp) %>%
+          dplyr::select(-year)
+        
+        #arrange the envelope data back into a list
+        envelopePts <- list("EnvOuter"=data.frame("outX" = temp_outer$outX,"outY"=temp_outer$outY),
+                            "EnvInner"=data.frame("inX" = temp_inner$inX,"inY" = temp_inner$inY))
+        
+        compDat <- data.frame(y1 = as.vector(unlist(temp_y_yr[,2])),
+                              y2 = as.vector(unlist(temp_y_yr[,3])))
+        
+        #add labelling variables to PI results dataframe
+        df_refPoints <- df_z %>%
+          group_by(assess_id) %>%
+          dplyr::summarise(refPoints = n())
+        
+        #command to skip envelope fitting for data with no reference envelope
+        abort <- ifelse(nrow(envelopePts[[1]]) == 0 & nrow(envelopePts[[2]]) == 0, TRUE, FALSE)
+        
+        if(abort==FALSE){
+          piPts <- PIcalc(compDat, envelopePts, 0.9)
+          piPts <- do.call(cbind.data.frame, piPts)
+          piPts$assess_id <- assess_id_temp
+          piPts$refPoints <- df_refPoints$refPoints[1]
+          piPts$year <- year_temp
+          
+          yrList <- rbind(yrList, piPts)
+        }
+      }
+      
+      piList <- rbind(piList, yrList)
+    }
+    
+    piList$lf_pair <- paste(temp_lf, collapse="-")
+    main_output <- rbind(main_output, piList)
+    
+  }
+  
+  main_output <- dplyr::rename(main_output, binomialProbability = 'binomial probability')
+  return(main_output)
+}
+
 
 #function for plotting the PI envelope
 plot_env <- function(x, y, z, lf, pi, label, threshold){
