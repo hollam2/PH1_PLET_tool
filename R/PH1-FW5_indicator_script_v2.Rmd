@@ -144,6 +144,9 @@ envAll <- find_envAll(x=df_ref, lf=df_lf)
 
 #function to calculate the lifeform pairs indicator from the reference envelopes and comparison data
 piResults <- PIcalcAll(x=envAll, y=df_comp, z=df_ref, lf=df_lf)
+
+#Calculate PI annually
+piResultsAnnual <- suppressWarnings(PIcalcAnnual(x=envAll, y=df_comp, z=df_ref, lf=df_lf))
 ```
 Generate plots of the lifeform pairs indicator
 ```{r}
@@ -175,9 +178,9 @@ combine_pi_plots(x=env_plots, y=ts_plots, maps=polygon_maps, limits=range(df_plo
 Generate an Excel output for indicator results
 ```{r}
 if(nrow(df_assess_id) > 1){
-  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults, "Assessment_ids" = df_assess_id)
+  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults, "PI_annual_results" = piResultsAnnual, "Assessment_ids" = df_assess_id)
 } else {
-  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults)
+  list_of_datasets <- list("Kendall_results" = df_fits_tot, "PI_results" = piResults, "PI_annual_results" = piResultsAnnual)
 }
 
 openxlsx::write.xlsx(list_of_datasets, file = paste0(dir_out, "PH1_results", ".xlsx"), overwrite = TRUE)
