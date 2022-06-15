@@ -39,14 +39,14 @@ plot_polys <- function(x, buff=2){
   if(all(!is.na(x$polygon_wkt))){
     
     #load spatial packages
-    list.of.packages <- c("rnaturalearth", "rnaturalearthhires", "sf")
+    list.of.packages <- c("rnaturalearth", "sf")
     new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
     if(length(new.packages)) install.packages(new.packages, repos = "http://packages.ropensci.org", type = "source")
     lapply(list.of.packages, require, character.only = TRUE)
     rm(list.of.packages, new.packages)
     
     #load shapefile of European landmass for display
-    coast <- rnaturalearth::ne_countries(returnclass = "sf", scale = "large")
+    coast <- rnaturalearth::ne_countries(returnclass = "sf", scale = "small")
     
     #convert WKT string to sf object
     polys <- st_as_sf(x, wkt="polygon_wkt")
@@ -402,10 +402,10 @@ PIcalcAnnual <- function(x, y, z, lf){
     df_inner <- subset(main_inner, lf_pair == paste(temp_lf, collapse="-"))
     
     df_y <- y %>%
-      select(assess_id, temp_lf, year)
+      select(assess_id, all_of(temp_lf), year)
     
     df_z <- z %>%
-      select(assess_id, temp_lf)
+      select(assess_id, all_of(temp_lf))
     
     assess_ids <- intersect(unique(df_y$assess_id), unique(df_z$assess_id))
     
@@ -723,11 +723,13 @@ plot_ts <- function(x){
         filter(assess_id == assess_id_temp) %>%
         dplyr::select(year, abundance)
       
-      years <- c(min(temp_params$year),max(temp_params$year))
-      years_brk <- ifelse(plyr::round_any(years[2],5,f=ceiling)-plyr::round_any(years[1],5,f=floor) <= 20, "2 years", "5 years")
+      round_any = function(x, accuracy, f=round){f(x/ accuracy) * accuracy}
       
-      years <- seq.Date(from = as.Date(paste(plyr::round_any(years[1],5,f=floor),"01","01",sep="-")), 
-                        to = as.Date(paste(plyr::round_any(years[2],5,f=ceiling)+1,"01","01",sep="-")), 
+      years <- c(min(temp_params$year),max(temp_params$year))
+      years_brk <- ifelse(round_any(years[2],5,f=ceiling)-round_any(years[1],5,f=floor) <= 20, "2 years", "5 years")
+      
+      years <- seq.Date(from = as.Date(paste(round_any(years[1],5,f=floor),"01","01",sep="-")), 
+                        to = as.Date(paste(round_any(years[2],5,f=ceiling)+1,"01","01",sep="-")), 
                         by = years_brk)
       
       y_bks <- if(max(temp_params$abundance)>=3){
