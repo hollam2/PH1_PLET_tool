@@ -216,13 +216,16 @@ df_lf <- rbind(data.frame(V1 = "diatom", V2 = "dinoflagellate"),
 #function for extracting a dataframe for a particular time period
 dataSelect <- function(x, lf, lims){
   
+  lifeforms <- intersect(unique(x$lifeform), as.vector(unlist(lf)))
+  
   output <- x %>%
     filter(lifeform %in% all_of(as.vector(unlist(lf))),
            year>=lims[1] & year<=lims[2]) %>%
     pivot_wider(names_from = lifeform, values_from = abundance) %>%
     arrange(assess_id, year, month) %>%
-    relocate(assess_id)
-  
+    relocate(assess_id) %>% 
+    drop_na()
+
   return(output)
 }
 
