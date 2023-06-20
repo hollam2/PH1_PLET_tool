@@ -35,6 +35,13 @@ file_lf <- "lifeform.csv"
 #set threshold for minimum number of months out of the year required for an assessment area to be included
 mon_thr <- 8
 ```
+Add any user-specified lifeform pairs. Replace lf1, lf2, lf3, lf4 etc. with relevant lifeform pairs contained in your data, if using your own data not downloaded from the PLET. You can add as many lifeform pairs as you like by adding additional dataframes.
+```{r}
+#construct a dataframe of relevant lifeform pair comparisons
+df_lf_user <- rbind(data.frame(V1 = "lf1", V2 = "lf2"),
+                    data.frame(V1 = "lf3", V2 = "lf4")
+)
+```
 Check if all required packages are installed. Install them if they are not present. Then load the packages.
 ```{r, include=FALSE}
 list.of.packages <- c("tidyverse", "data.table", "janitor", "pracma", "broom", "EnvStats", "patchwork", "rnaturalearth", "zoo")
@@ -129,6 +136,10 @@ df <- fill_gaps(x=df, max_gap = 3)
 ```
 Define the reference and comparison datasets
 ```{r}
+#add the user specified lifeform pairs to the default list
+df_lf <- rbind(df_lf, df_lf_user)
+rm(df_lf_user)
+
 #function for extracting a dataframe for a particular time period
 df_ref <- dataSelect(x=df, lf=df_lf, lims=ref_years)
 df_comp <- dataSelect(x=df, lf=df_lf, lims=comp_years)
