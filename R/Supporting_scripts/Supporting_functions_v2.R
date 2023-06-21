@@ -209,7 +209,7 @@ df_lf <- rbind(data.frame(V1 = "diatom", V2 = "dinoflagellate"),
                data.frame(V1 = "lg_phyto", V2 = "sm_phyto"),
                data.frame(V1 = "phytoplankton", V2 = "non_carniv_zoo"),
                data.frame(V1 = "crustacean", V2 = "gelatinous"),
-               data.frame(V1 = "gelatinous", V2 = "fishlarvae")
+               data.frame(V1 = "gelatinous", V2 = "fish_larvae")
 )
 
 
