@@ -1,0 +1,12 @@
+pyarrow
+pandas
+geopandas
+matplotlib
+contextily
+shapely
+pystac_client
+copernicusmarine
+xarray
+requests
+aiohttp
+copernicusmarine
