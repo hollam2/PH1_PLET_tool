@@ -2,3 +2,4 @@
 *.idea
 *.csv
 *.xlsx
+.Rproj.user

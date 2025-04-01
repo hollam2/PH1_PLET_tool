@@ -1,0 +1,5 @@
+reticulate
+testthat
+dplyr
+ggplot2
+stac
