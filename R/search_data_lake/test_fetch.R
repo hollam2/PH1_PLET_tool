@@ -1,7 +1,7 @@
 library(testthat)
 
 # Source the function to be tested
-source("fetch_occurrence_data2.R")
+source("_fetch_occurrence_data.R")
 
 # Unit test for fetch_occurrence_data
 test_that("fetch_occurrence_data returns expected output", {

@@ -1,5 +1,20 @@
 library(rstac)
 
+#' This function connects to a STAC catalog using rstac, retrieves collections,
+#' and extracts asset URLs for items that contain the specified variable in 
+#' their ID.
+#'
+#' @param url A character string specifying the STAC catalog URL. Default is 
+#' "https://catalog.dive.edito.eu".
+#'
+#' @return A list of asset URLs (parquet files) if found, otherwise NULL in 
+#' case of an error.
+#'
+#' @examples
+#' fetch_occurrence_data()
+#' fetch_occurrence_data("https://another-stac-url.example.com")
+
+
 fetch_occurrence_data <- function(url = "https://catalog.dive.edito.eu") {
   result <- tryCatch({
     # Connect to STAC API
