@@ -1,14 +1,14 @@
 library(testthat)
 
 # Source the function to be tested
-source("_fetch_occurrence_data.R")
+source("_search_STAC.R")
 
 # Unit test for fetch_occurrence_data
-test_that("fetch_occurrence_data returns expected output", {
+test_that("search_STAC returns expected output", {
   
   # Test with a valid URL
   url <- "https://catalog.dive.edito.eu"
-  result <- suppressWarnings(fetch_occurrence_data(url))  # Suppress warnings
+  result <- suppressWarnings(search_STAC(url))  # Suppress warnings
   
   expect_true(is.list(result) || is.null(result), "Output should be a list or NULL on failure")
   
@@ -22,7 +22,7 @@ test_that("fetch_occurrence_data handles incorrect URL gracefully", {
   
   # Invalid URL test
   invalid_url <- "https://invalid-url.example.com"
-  result <- fetch_occurrence_data(invalid_url)
+  result <- search_STAC(invalid_url)
   
   expect_null(result, "Function should return NULL for invalid URLs")
 })

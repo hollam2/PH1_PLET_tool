@@ -1,21 +1,39 @@
 library(rstac)
 
-#' This function connects to a STAC catalog using rstac, retrieves collections,
-#' and extracts asset URLs for items that contain the specified variable in 
-#' their ID.
+#' Fetch Asset URLs from a STAC Catalog
 #'
-#' @param url A character string specifying the STAC catalog URL. Default is 
-#' "https://catalog.dive.edito.eu".
+#' Connects to a SpatioTemporal Asset Catalog (STAC) using the `rstac` package,
+#' retrieves collections, searches for items whose collection ID contains a specified
+#' variable keyword, and extracts asset URLs matching a specified asset type (e.g., "parquet").
 #'
-#' @return A list of asset URLs (parquet files) if found, otherwise NULL in 
-#' case of an error.
+#' @param url Character string specifying the STAC catalog URL. Default is 
+#'   "https://catalog.dive.edito.eu".
+#' @param variable Character string used to filter collections by matching 
+#'   their ID. Only collections with IDs that include this string will be searched.
+#'   Default is "occurrence".
+#' @param asset Character string specifying the asset key to extract from each item 
+#'   (e.g., "parquet"). Default is "parquet".
+#'
+#' @return A list of asset URLs (e.g., links to parquet files) if found. 
+#' Returns `NULL` in case of connection errors, no matching collections/items,
+#' or no assets matching the given key.
 #'
 #' @examples
+#' # Default usage
 #' fetch_occurrence_data()
-#' fetch_occurrence_data("https://another-stac-url.example.com")
+#'
+#' # Custom STAC URL
+#' fetch_occurrence_data(url = "https://another-stac-url.example.com")
+#'
+#' # Custom variable and asset key
+#' fetch_occurrence_data(variable = "species", asset = "data_asset")
+#'
+#' @export
 
 
-fetch_occurrence_data <- function(url = "https://catalog.dive.edito.eu") {
+search_STAC <- function(url = "https://catalog.dive.edito.eu",
+                        variable = "occurrence",
+                        asset = "parquet") {
   result <- tryCatch({
     # Connect to STAC API
     stac_api <- stac(url)
@@ -29,7 +47,6 @@ fetch_occurrence_data <- function(url = "https://catalog.dive.edito.eu") {
       return(NULL)
     }
     
-    variable <- "occurrence"
     items <- list()
     occurrence_data_list <- list()
     
@@ -60,7 +77,7 @@ fetch_occurrence_data <- function(url = "https://catalog.dive.edito.eu") {
       for (key in names(item$assets)) {
         value <- item$assets[[key]]
 
-        if (key == "parquet") {
+        if (key == asset) {
           occurrence_data_list <- append(occurrence_data_list, value$href)
         }
       }

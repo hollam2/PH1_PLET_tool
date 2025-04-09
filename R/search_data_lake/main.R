@@ -1,12 +1,13 @@
 library(dplyr)
 library(rlang)
 library(arrow)
+library(yaml)
 
-source("search_data_lake/_fetch_occurrence_data.R")
+source("search_data_lake/_search_STAC.R")
 source("search_data_lake/_open_parquet.R")
 source("search_data_lake/_filter_parquet.R")
 
-occ = fetch_occurrence_data()
+occ = search_STAC()
 print(occ)
 
 # alternatives for occ parquet
@@ -47,15 +48,28 @@ print(my_selection)
 my_subset = subset(my_selection, select=c(parameter,
                                           parameter_value,
                                           datasetid,
-                                          observationdate
-                                           
-                                        
+                                          observationdate,
+                                          scientificname_accepted,
+                                          observationdate,
+                                          longitude,
+                                          latitude
                                           )
                    )
+my_subset = my_subset[my_subset$parameter == "WaterAbund (#/ml)",]
+print(my_subset)
 
 
 
+# Load the classification mapping
+lifeform_map <- read_yaml("lifeform_lookup.yaml")
 
+# Initialize lifeform column
+my_subset$lifeform <- NA
+
+# Loop through and classify
+for (group in names(lifeform_map)) {
+  my_subset$lifeform[my_subset$scientificname_accepted %in% lifeform_map[[group]]] <- group
+}
 
 
 
