@@ -108,7 +108,12 @@ my_agg = aggregate(cbind(abundance, num_samples) ~ period + lifeform,
                    sum)
 
 
+my_agg$abundance = my_agg$abundance/my_agg$num_samples
 
+
+dest = file.path("../data/PH1_edito_test.csv")
+
+write.csv(my_agg, dest, row.names=F)
 
 
 
