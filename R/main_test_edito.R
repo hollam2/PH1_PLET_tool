@@ -51,8 +51,8 @@ dir.create(file.path(dir_out), showWarnings = FALSE)
 
 df = read.csv("../data/PH1_edito_test.csv")
 
-
-dates <- read.table(text = as.character(df$period), sep="-", stringsAsFactors=FALSE)
+dates <- read.table(text = as.character(df$period), sep="-", 
+                    stringsAsFactors=FALSE)
 print(dates)
 colnames(dates) <- c("year", "month")
 
