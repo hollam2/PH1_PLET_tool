@@ -173,7 +173,7 @@ fill_gaps <- function(x, max_gap = 3){
   temp <- x %>% 
     arrange(assess_id, lifeform, year, month) %>%
     group_by(assess_id, lifeform) %>%
-    dplyr::mutate(abundance_interp = zoo::na.approx(abundance, maxgap = max_gap, rule = 2)) %>%
+    dplyr::mutate(abundance_interp = zoo::na.approx(abundance, maxgap = max_gap, rule = 1, na.rm = FALSE)) %>%
     ungroup()
   
   #print the number of NA months replaced in each assess_id
