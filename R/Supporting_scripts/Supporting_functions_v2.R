@@ -146,7 +146,7 @@ clean_years <- function(x, thr){
     output <- x %>%
       left_join(data.frame(assess_id=temp$assess_id,
                            year=temp$year,
-                           exclude=TRUE),
+                           exclude=TRUE) %>% distinct(),
                 by=c("assess_id", "year")) %>%
       mutate(exclude = ifelse(is.na(exclude),FALSE,TRUE)) %>%
       mutate(abundance = ifelse(exclude==TRUE, NA, abundance)) %>%
